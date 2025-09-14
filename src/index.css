@@ -1,0 +1,144 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Definition of the design system. All colors, gradients, fonts, etc should be defined here. 
+All colors MUST be HSL.
+*/
+
+@layer base {
+  :root {
+    /* VaultPro-inspired color system */
+    --background: 220 15% 97%; /* #f8f9fb - lighter background */
+    --foreground: 224 14% 26%; /* #3c454e */
+
+    --card: 0 0% 100%; /* white */
+    --card-foreground: 224 14% 26%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 224 14% 26%;
+
+    /* Primary brand color - Corporate blue */
+    --primary: 217 89% 48%; /* #1a73e8 */
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 210 40% 96.1%;
+    --secondary-foreground: 224 14% 26%;
+
+    --muted: 220 14% 95%; /* light grey for subtle elements */
+    --muted-foreground: 220 9% 46%; /* grey text */
+
+    --accent: 217 89% 48%; /* same as primary for consistency */
+    --accent-foreground: 0 0% 100%;
+
+    --destructive: 0 84% 60%; /* red for withdrawals/negative */
+    --destructive-foreground: 0 0% 100%;
+
+    /* Success color for positive metrics */
+    --success: 142 76% 36%; /* #16a34a */
+    --success-foreground: 0 0% 100%;
+
+    /* Warning color for pending items */
+    --warning: 38 92% 50%; /* #f59e0b */
+    --warning-foreground: 0 0% 100%;
+
+    /* Chart colors */
+    --chart-deposit: 217 89% 48%; /* blue for deposits */
+    --chart-withdrawal: 0 84% 60%; /* red for withdrawals */
+    --chart-1: 217 89% 48%; /* primary blue */
+    --chart-2: 142 76% 36%; /* green */
+    --chart-3: 38 92% 50%; /* orange */
+    --chart-4: 262 83% 58%; /* purple */
+    --chart-5: 173 80% 40%; /* teal */
+
+    --border: 220 13% 91%; /* subtle borders */
+    --input: 220 13% 91%;
+    --ring: 217 89% 48%; /* focus ring matches primary */
+
+    --radius: 0.75rem; /* slightly more rounded */
+
+    /* Dark gradient sidebar colors - HIGH CONTRAST */
+    --sidebar-background: 222 84% 5%; /* #020617 - very dark navy */
+    --sidebar-background-secondary: 222 47% 11%; /* #0f172a - darker gradient end */
+    --sidebar-foreground: 210 40% 98%; /* #f8fafc - high contrast white */
+    --sidebar-primary: 217 91% 60%; /* #3b82f6 - bright blue for accents */
+    --sidebar-primary-foreground: 210 40% 98%;
+    --sidebar-accent: 215 28% 17%; /* #1e293b - subtle hover state */
+    --sidebar-accent-foreground: 210 40% 98%;
+    --sidebar-border: 215 25% 27%; /* #475569 - visible border */
+    --sidebar-ring: 217 91% 60%;
+  }
+
+  .dark {
+    --background: 222.2 84% 4.9%;
+    --foreground: 210 40% 98%;
+
+    --card: 222.2 84% 4.9%;
+    --card-foreground: 210 40% 98%;
+
+    --popover: 222.2 84% 4.9%;
+    --popover-foreground: 210 40% 98%;
+
+    --primary: 210 40% 98%;
+    --primary-foreground: 222.2 47.4% 11.2%;
+
+    --secondary: 217.2 32.6% 17.5%;
+    --secondary-foreground: 210 40% 98%;
+
+    --muted: 217.2 32.6% 17.5%;
+    --muted-foreground: 215 20.2% 65.1%;
+
+    --accent: 217.2 32.6% 17.5%;
+    --accent-foreground: 210 40% 98%;
+
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 210 40% 98%;
+
+    --success: 142 76% 36%;
+    --success-foreground: 0 0% 100%;
+
+    --warning: 38 92% 50%;
+    --warning-foreground: 0 0% 100%;
+
+    --border: 217.2 32.6% 17.5%;
+    --input: 217.2 32.6% 17.5%;
+    --ring: 212.7 26.8% 83.9%;
+    
+    --sidebar-background: 220 30% 8%;
+    --sidebar-background-secondary: 220 25% 12%;
+    --sidebar-foreground: 0 0% 95%;
+    --sidebar-primary: 217 89% 48%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 220 20% 15%;
+    --sidebar-accent-foreground: 0 0% 100%;
+    --sidebar-border: 220 25% 15%;
+    --sidebar-ring: 217.2 91.2% 59.8%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+  }
+}
+
+@layer components {
+  /* Enhanced hover effects */
+  .hover-scale {
+    @apply transition-all duration-200 hover:scale-105 hover:shadow-md;
+  }
+  
+  /* Enhanced fade-in animation */
+  .animate-fade-in {
+    @apply animate-in fade-in duration-500 slide-in-from-bottom-4;
+  }
+  
+  /* Card hover effects */
+  .card-hover {
+    @apply transition-all duration-300 hover:shadow-lg hover:-translate-y-1;
+  }
+}
