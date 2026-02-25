@@ -1,22 +1,10 @@
-# Welcome to your Lovable project
+# Forex Admin Dashboard
 
-## Project info
-
-**URL**: https://lovable.dev/projects/a8fb58f6-18ec-4c75-8ea0-dd5e12ae6d78
-
-## How can I edit this code?
-
-There are several ways of editing your application.
-
-**Use Lovable**
-
-Simply visit the [Lovable Project](https://lovable.dev/projects/a8fb58f6-18ec-4c75-8ea0-dd5e12ae6d78) and start prompting.
-
-Changes made via Lovable will be committed automatically to this repo.
+## Getting Started
 
 **Use your preferred IDE**
 
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
+Clone this repo and push changes.
 
 The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
 
@@ -62,12 +50,4 @@ This project is built with:
 
 ## How can I deploy this project?
 
-Simply open [Lovable](https://lovable.dev/projects/a8fb58f6-18ec-4c75-8ea0-dd5e12ae6d78) and click on Share -> Publish.
-
-## Can I connect a custom domain to my Lovable project?
-
-Yes, you can!
-
-To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
-
-Read more here: [Setting up a custom domain](https://docs.lovable.dev/tips-tricks/custom-domain#step-by-step-guide)
+Build the project using `npm run build` and deploy the `dist` folder to your hosting provider.
