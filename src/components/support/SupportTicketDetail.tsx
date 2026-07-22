@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { X, Paperclip, Send } from "lucide-react";
+import { useState, useRef, useEffect } from "react";
+import { X, Paperclip, Send, User, CheckCircle, ShieldCheck, Tag, AlertTriangle, Eye } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
@@ -12,38 +12,38 @@ import {
   useCloseTicketMutation,
 } from "@/API/support.api";
 import { toast } from "sonner";
+import { getStatusBadgeConfig, getPriorityBadgeConfig } from "./SupportTicketList";
 
 interface SupportTicketDetailProps {
   ticket: SupportTicket;
 }
 
-const statusColors = {
-  open: "bg-blue-500",
-  closed: "bg-gray-500",
-};
-
 export function SupportTicketDetail({ ticket }: SupportTicketDetailProps) {
   const [replyText, setReplyText] = useState("");
   const [file, setFile] = useState<File | null>(null);
+  const [activeImage, setActiveImage] = useState<string | null>(null);
 
-  const [sendReply, { isLoading }] = useSendReplyMutation();
+  const [sendReply, { isLoading: isSending }] = useSendReplyMutation();
   const [closeTicket, { isLoading: isClosing }] = useCloseTicketMutation();
 
-  const formatDate = (date?: Date) => {
-    if (!date || isNaN(date.getTime())) return "N/A"; // ✅ safe fallback
-    return new Intl.DateTimeFormat("en-US", {
-      month: "numeric",
-      day: "numeric",
-      year: "numeric",
-    }).format(date);
+  const messagesEndRef = useRef<HTMLDivElement | null>(null);
+
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   };
 
-  const formatTime = (date?: Date) => {
-    if (!date || isNaN(date.getTime())) return "";
+  useEffect(() => {
+    scrollToBottom();
+  }, [ticket.id, ticket.messages.length]);
+
+  const formatDate = (date?: Date | null) => {
+    if (!date || isNaN(date.getTime())) return "N/A";
     return new Intl.DateTimeFormat("en-US", {
-      hour: "numeric",
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+      hour: "2-digit",
       minute: "2-digit",
-      hour12: true,
     }).format(date);
   };
 
@@ -53,7 +53,7 @@ export function SupportTicketDetail({ ticket }: SupportTicketDetailProps) {
       return;
     }
     try {
-      const res = await sendReply({
+      await sendReply({
         ticketId: ticket.id,
         content: replyText.trim(),
         file: file ?? undefined,
@@ -62,152 +62,241 @@ export function SupportTicketDetail({ ticket }: SupportTicketDetailProps) {
       toast.success("Reply sent successfully");
       setReplyText("");
       setFile(null);
-    } catch (err) {
+    } catch (err: any) {
       toast.error(err?.data?.message || "Failed to send reply");
     }
   };
 
   const handleCloseTicket = async () => {
     try {
-      const res = await closeTicket({ ticketId: ticket.id }).unwrap();
+      await closeTicket({ ticketId: ticket.id }).unwrap();
       toast.success("Ticket closed successfully");
-    } catch (err) {
+    } catch (err: any) {
       toast.error(err?.data?.message || "Failed to close ticket");
     }
   };
 
+  const statusConfig = getStatusBadgeConfig(ticket.status);
+  const priorityConfig = getPriorityBadgeConfig(ticket.priority);
+  const isTicketClosed = (ticket.status || "").toLowerCase() === "closed" || (ticket.status || "").toLowerCase() === "resolved";
+
   return (
-    <div className="h-full flex flex-col bg-card rounded-lg border">
-      {/* Header */}
-      <div className="p-6 border-b shrink-0">
-        <div className="flex items-start justify-between mb-4">
-          <div className="flex-1">
-            <h1 className="text-xl font-semibold mb-2">
-              {ticket.title} — {ticket.clientName}
-            </h1>
-            <h1 className="text-md  mb-2">Ticket ID - {ticket.ticketId}</h1>
-            <div className="flex items-center gap-4 text-sm text-muted-foreground">
-              <span>
-                Client • {formatDate(ticket.createdAt)},{" "}
-                {formatTime(ticket.createdAt)}
-              </span>
-              <Badge className={cn("text-white", statusColors[ticket.status])}>
-                {ticket.status}
+    <div className="h-full flex flex-col bg-card rounded-xl border shadow-sm overflow-hidden">
+      {/* Top Header */}
+      <div className="p-5 border-b bg-muted/15 shrink-0 space-y-3">
+        <div className="flex items-start justify-between gap-4">
+          <div className="space-y-1 min-w-0">
+            <div className="flex items-center gap-2 flex-wrap">
+              <h1 className="text-lg font-bold tracking-tight text-foreground truncate">
+                {ticket.title}
+              </h1>
+              <Badge variant="outline" className={cn("text-xs font-semibold px-2 py-0.5", statusConfig.className)}>
+                {statusConfig.label}
               </Badge>
+              {ticket.priority && (
+                <Badge variant="outline" className={cn("text-xs px-2 py-0.5", priorityConfig.className)}>
+                  {priorityConfig.label} Priority
+                </Badge>
+              )}
+            </div>
+
+            <div className="flex items-center gap-3 text-xs text-muted-foreground flex-wrap pt-0.5">
+              <span className="font-mono bg-muted px-1.5 py-0.5 rounded text-foreground/80 font-medium">
+                #{ticket.ticketId}
+              </span>
+              <span className="flex items-center gap-1 font-medium text-foreground/90">
+                <User className="h-3.5 w-3.5 text-primary" />
+                {ticket.clientName}
+              </span>
+              {ticket.category && (
+                <span className="flex items-center gap-1">
+                  <Tag className="h-3.5 w-3.5 text-muted-foreground/70" />
+                  {ticket.category}
+                </span>
+              )}
+              <span>Opened: {formatDate(ticket.createdAt)}</span>
             </div>
           </div>
 
-          <Button
-            variant="outline"
-            onClick={handleCloseTicket}
-            disabled={ticket.status === "closed" || isClosing}
-          >
-            {isClosing ? "Closing..." : "Close Ticket"}
-          </Button>
+          {/* Action Buttons */}
+          <div className="flex items-center gap-2 shrink-0">
+            {ticket.assignedAgent && (
+              <div className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-primary/10 border border-primary/20 text-xs font-semibold text-primary">
+                <ShieldCheck className="h-4 w-4" />
+                <span>Agent: {ticket.assignedAgent}</span>
+              </div>
+            )}
+
+            <Button
+              variant={isTicketClosed ? "outline" : "destructive"}
+              size="sm"
+              onClick={handleCloseTicket}
+              disabled={isTicketClosed || isClosing}
+              className="h-8 text-xs font-medium"
+            >
+              {isClosing ? "Closing..." : isTicketClosed ? "Closed" : "Close Ticket"}
+            </Button>
+          </div>
         </div>
       </div>
 
-      {/* Messages */}
-      <ScrollArea className="flex-1 overflow-y-auto px-6 py-4">
-        <div className="space-y-6">
-          {ticket.messages.map((message) => (
-            <div key={message.id} className="space-y-2">
-              <div className="flex items-center gap-2 text-sm">
-                <span className="font-medium">
-                  {message.sender === "client"
-                    ? ticket.clientName
-                    : "Support Team"}
-                </span>
-                <span className="text-muted-foreground">
-                  {formatDate(message.createdAt)},{" "}
-                  {formatTime(message.createdAt)}
-                </span>
-              </div>
+      {/* Messages Scroll Area */}
+      <ScrollArea className="flex-1 px-6 py-5">
+        <div className="space-y-5 w-full">
+          {ticket.messages.map((message) => {
+            const isClient = message.sender === "client";
 
+            return (
               <div
+                key={message.id}
                 className={cn(
-                  "p-4 rounded-lg max-w-[50%]",
-                  message.sender === "client"
-                    ? "bg-muted ml-0"
-                    : "bg-primary/10 ml-auto"
+                  "flex flex-col space-y-1.5 max-w-[85%] sm:max-w-[75%]",
+                  isClient ? "mr-auto items-start" : "ml-auto items-end"
                 )}
               >
-                <p className="text-sm leading-relaxed whitespace-pre-wrap">
-                  {message.content}
-                </p>
+                {/* Sender Header */}
+                <div className="flex items-center gap-2 text-xs text-muted-foreground px-1">
+                  <span className="font-semibold text-foreground/90">
+                    {message.senderName || (isClient ? ticket.clientName : ticket.assignedAgent || "Support Team")}
+                  </span>
+                  <span>•</span>
+                  <span className="text-[11px]">{formatDate(message.createdAt)}</span>
+                </div>
 
-                {message.attachments && message.attachments.length > 0 && (
-                  <div className="mt-3 flex gap-2 flex-wrap">
-                    {message.attachments.map((src, i) => (
-                      <Dialog key={i}>
-                        <DialogTrigger asChild>
+                {/* Message Bubble */}
+                <div
+                  className={cn(
+                    "p-4 rounded-2xl text-sm leading-relaxed whitespace-pre-wrap shadow-xs border",
+                    isClient
+                      ? "bg-muted/60 text-foreground border-border/80 rounded-tl-xs"
+                      : "bg-primary text-primary-foreground border-primary/20 rounded-tr-xs"
+                  )}
+                >
+                  <p>{message.content}</p>
+
+                  {/* Attachment Thumbnails */}
+                  {message.attachments && message.attachments.length > 0 && (
+                    <div className="mt-3 flex gap-2 flex-wrap">
+                      {message.attachments.map((src, i) => (
+                        <div
+                          key={i}
+                          onClick={() => setActiveImage(src)}
+                          className="relative group cursor-pointer overflow-hidden rounded-lg border border-border/40 bg-black/10"
+                        >
                           <img
                             src={src}
-                            alt="attachment"
-                            className="w-32 h-32 object-cover rounded cursor-pointer border"
+                            alt="Attachment"
+                            className="w-36 h-36 object-cover transition-transform duration-200 group-hover:scale-105"
                           />
-                        </DialogTrigger>
-                        <DialogContent className="max-w-4xl p-0 bg-transparent border-0 shadow-none">
-                          <img
-                            src={src}
-                            alt="full"
-                            className="w-full h-auto max-h-[90vh] object-contain rounded"
-                          />
-                        </DialogContent>
-                      </Dialog>
-                    ))}
-                  </div>
-                )}
+                          <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white">
+                            <Eye className="h-5 w-5" />
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
               </div>
+            );
+          })}
+
+          {ticket.messages.length === 0 && (
+            <div className="text-center py-12 text-muted-foreground text-sm">
+              No message history found for this ticket.
             </div>
-          ))}
+          )}
+
+          <div ref={messagesEndRef} />
         </div>
       </ScrollArea>
 
-      {/* Reply Input */}
-      <div className="p-6 border-t shrink-0">
-        {ticket.status === "closed" ? (
-          <div className="text-center text-sm text-muted-foreground">
-            This ticket has been closed. You cannot send further messages.
+      {/* Image Viewer Lightbox Modal */}
+      {activeImage && (
+        <Dialog open={!!activeImage} onOpenChange={() => setActiveImage(null)}>
+          <DialogContent className="max-w-4xl p-2 bg-black/90 border-none text-white shadow-2xl flex items-center justify-center">
+            <img
+              src={activeImage}
+              alt="Attachment Full Preview"
+              className="max-h-[85vh] max-w-full object-contain rounded-lg"
+            />
+          </DialogContent>
+        </Dialog>
+      )}
+
+      {/* Footer Reply Form / Resolved Banner */}
+      <div className="p-4 border-t bg-background shrink-0">
+        {isTicketClosed ? (
+          <div className="p-4 bg-purple-500/10 border border-purple-500/20 rounded-xl flex items-center gap-3.5 shadow-xs">
+            <div className="h-9 w-9 rounded-full bg-purple-600 text-white flex items-center justify-center shrink-0 shadow-xs">
+              <CheckCircle className="h-5 w-5" />
+            </div>
+            <div>
+              <h4 className="text-xs font-bold text-purple-950 dark:text-purple-300 tracking-tight">
+                This support ticket is resolved & closed
+              </h4>
+              <p className="text-[11px] text-purple-700/90 dark:text-purple-400 font-medium mt-0.5">
+                This conversation is closed for new replies. No further actions required.
+              </p>
+            </div>
           </div>
         ) : (
-          <div className="space-y-4">
-            <Textarea
-              placeholder="Type your reply..."
-              value={replyText}
-              onChange={(e) => setReplyText(e.target.value)}
-              className="min-h-[100px] resize-none"
-            />
+          <div className="w-full space-y-3">
+            {file && (
+              <div className="flex items-center gap-2 px-3 py-1.5 bg-muted rounded-md text-xs w-fit">
+                <Paperclip className="h-3.5 w-3.5 text-primary" />
+                <span className="font-medium truncate max-w-[200px]">{file.name}</span>
+                <button
+                  type="button"
+                  onClick={() => setFile(null)}
+                  className="text-muted-foreground hover:text-foreground ml-1"
+                >
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              </div>
+            )}
+
+            <div className="flex gap-2">
+              <Textarea
+                placeholder="Write a response to the client..."
+                value={replyText}
+                onChange={(e) => setReplyText(e.target.value)}
+                disabled={isSending}
+                className="min-h-[70px] max-h-[140px] text-xs resize-none bg-background focus-visible:ring-1"
+              />
+            </div>
 
             <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
+              <label
+                className={cn(
+                  "flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground cursor-pointer px-2 py-1 rounded transition-colors",
+                  isSending && "pointer-events-none opacity-50"
+                )}
+              >
+                <Paperclip className="h-4 w-4" />
+                <span>Attach image</span>
                 <input
-                  id="file-upload"
                   type="file"
+                  accept="image/*"
                   className="hidden"
-                  onChange={(e) =>
-                    setFile(e.target.files ? e.target.files[0] : null)
-                  }
+                  onChange={(e) => setFile(e.target.files?.[0] || null)}
+                  disabled={isSending}
                 />
-                <label htmlFor="file-upload">
-                  <Button variant="outline" size="sm" asChild>
-                    <span>
-                      <Paperclip className="h-4 w-4 mr-2" />
-                      {file ? "Change File" : "Choose File"}
-                    </span>
-                  </Button>
-                </label>
-                <span className="text-sm text-muted-foreground">
-                  {file ? file.name : "No file chosen"}
-                </span>
-              </div>
+              </label>
 
               <Button
+                size="sm"
                 onClick={handleSendReply}
-                disabled={isLoading || (!replyText.trim() && !file)}
+                disabled={isSending || (!replyText.trim() && !file)}
+                className="h-8 px-4 text-xs font-semibold"
               >
-                <Send className="h-4 w-4 mr-2" />
-                {isLoading ? "Sending..." : "Send Reply"}
+                {isSending ? (
+                  "Sending..."
+                ) : (
+                  <>
+                    <Send className="h-3.5 w-3.5 mr-1.5" />
+                    Send Reply
+                  </>
+                )}
               </Button>
             </div>
           </div>

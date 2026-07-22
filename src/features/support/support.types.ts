@@ -4,13 +4,16 @@ export interface SupportReply {
   content: string;
   screenshot?: string;
   isBroker: boolean;
+  isRead?: boolean;
+  senderName?: string;
   createdAt: string;
-  updatedAt: string;
+  updatedAt?: string;
 }
 
 export interface SupportUser {
   firstName: string;
   lastName: string;
+  email?: string;
 }
 
 export interface SupportTicketApi {
@@ -18,7 +21,11 @@ export interface SupportTicketApi {
   ticketId: string;
   subject: string;
   content: string;
-  status: "OPEN" | "CLOSED";
+  status: "OPEN" | "IN_PROGRESS" | "AWAITING_REPLY" | "RESOLVED" | "CLOSED";
+  category?: string;
+  priority?: string;
+  assignedAgent?: string;
+  hasUnreadAdminReply?: boolean;
   createdAt: string;
   updatedAt: string;
   screenshot?: string;
@@ -52,7 +59,11 @@ export interface SupportTicket {
   ticketId: string;
   title: string;
   description: string;
-  status: "open" | "closed";
+  status: "open" | "in_progress" | "awaiting_reply" | "resolved" | "closed" | string;
+  category?: string;
+  priority?: string;
+  assignedAgent?: string;
+  hasUnreadUserMessage?: boolean;
   clientName: string;
   createdAt: Date;
   updatedAt: Date;
