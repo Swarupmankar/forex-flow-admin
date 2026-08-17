@@ -111,6 +111,9 @@ import type {
   UpdateNotificationRequest,
   UpdateNotificationResponse,
   DeleteNotificationResponse,
+  NotificationCatalogResponse,
+  BroadcastNotificationRequest,
+  BroadcastNotificationResponse,
 } from "@/features/notifications/notifications.types";
 
 export const notificationsApi = baseApi.injectEndpoints({
@@ -122,6 +125,28 @@ export const notificationsApi = baseApi.injectEndpoints({
         method: "GET",
       }),
       providesTags: ["Notifications"],
+    }),
+
+    // 📌 Get notification catalog for super-admin broadcast
+    getNotificationCatalog: build.query<NotificationCatalogResponse, void>({
+      query: () => ({
+        url: ENDPOINTS.ADMIN_NOTIFICATION.CATALOG,
+        method: "GET",
+      }),
+      providesTags: ["Notifications"],
+    }),
+
+    // 📌 Broadcast system notification to all users
+    broadcastNotification: build.mutation<
+      BroadcastNotificationResponse,
+      BroadcastNotificationRequest
+    >({
+      query: (body) => ({
+        url: ENDPOINTS.ADMIN_NOTIFICATION.BROADCAST,
+        method: "POST",
+        data: body,
+      }),
+      invalidatesTags: ["Notifications"],
     }),
 
     // 📌 Create notification
@@ -208,7 +233,10 @@ export const notificationsApi = baseApi.injectEndpoints({
 
 export const {
   useGetNotificationsQuery,
+  useGetNotificationCatalogQuery,
+  useBroadcastNotificationMutation,
   useCreateNotificationMutation,
   useUpdateNotificationMutation,
   useDeleteNotificationMutation,
 } = notificationsApi;
+

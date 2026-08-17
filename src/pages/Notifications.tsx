@@ -4,6 +4,7 @@ import { NotificationsHeader } from "@/components/notifications/NotificationsHea
 import { NotificationsFilters } from "@/components/notifications/NotificationsFilters";
 import { NotificationsList } from "@/components/notifications/NotificationsList";
 import { CreateAnnouncementModal } from "@/components/notifications/CreateAnnouncementModal";
+import { BroadcastNotificationModal } from "@/components/notifications/BroadcastNotificationModal";
 import { NotificationDetailDrawer } from "@/components/notifications/NotificationDetailDrawer";
 import { exportNotifications } from "@/lib/table-exports";
 import {
@@ -37,6 +38,7 @@ export default function Notifications() {
   const [searchTerm, setSearchTerm] = useState("");
   const [dateRange, setDateRange] = useState<{ from?: Date; to?: Date }>({});
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  const [isBroadcastModalOpen, setIsBroadcastModalOpen] = useState(false);
   const [isDetailDrawerOpen, setIsDetailDrawerOpen] = useState(false);
   const [selectedNotification, setSelectedNotification] =
     useState<Notification | null>(null);
@@ -174,6 +176,7 @@ export default function Notifications() {
       <div className="space-y-6">
         <NotificationsHeader
           onCreateClick={() => setIsCreateModalOpen(true)}
+          onBroadcastClick={() => setIsBroadcastModalOpen(true)}
           onExport={handleExport}
         />
 
@@ -211,6 +214,11 @@ export default function Notifications() {
           notification={editingNotification}
         />
 
+        <BroadcastNotificationModal
+          isOpen={isBroadcastModalOpen}
+          onClose={() => setIsBroadcastModalOpen(false)}
+        />
+
         <NotificationDetailDrawer
           isOpen={isDetailDrawerOpen}
           onClose={() => setIsDetailDrawerOpen(false)}
@@ -220,3 +228,4 @@ export default function Notifications() {
     </DashboardLayout>
   );
 }
+

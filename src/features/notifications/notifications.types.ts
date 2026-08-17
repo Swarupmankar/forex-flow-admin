@@ -45,3 +45,44 @@ export interface UpdateNotificationResponse {
 export interface DeleteNotificationResponse {
   message: string;
 }
+
+// 📌 Admin Notification Catalog & Broadcast Types
+export type NotificationSeverity = "INFORMATIONAL" | "ACTION_REQUIRED" | "CRITICAL";
+
+export interface NotificationTemplate {
+  title: string;
+  description: string;
+  severity: NotificationSeverity;
+}
+
+export interface NotificationCatalogResponse {
+  userEvents: string[];
+  systemEvents: string[];
+  severities: NotificationSeverity[];
+  templates: Record<string, NotificationTemplate>;
+}
+
+export interface BroadcastNotificationRequest {
+  event:
+    | "SCHEDULED_MAINTENANCE"
+    | "TRADING_TEMPORARILY_UNAVAILABLE"
+    | "DEPOSIT_SERVICE_UNAVAILABLE"
+    | "WITHDRAWAL_SERVICE_UNAVAILABLE"
+    | "MARKET_DATA_INTERRUPTION"
+    | "TRADING_SYSTEM_ISSUE"
+    | "SERVICE_RESTORED"
+    | (string & {});
+  title?: string;
+  description?: string;
+  severity?: NotificationSeverity;
+  metadata?: Record<string, unknown>;
+}
+
+export interface BroadcastNotificationResponse {
+  count: number;
+  event: string;
+  title: string;
+  description: string;
+  severity: NotificationSeverity;
+}
+

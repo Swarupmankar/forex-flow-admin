@@ -42,6 +42,10 @@ export const ENDPOINTS = {
     UPDATE: "/broker/notification/update",
     DELETE: (id: number) => `/broker/notification/${id}`,
   },
+  ADMIN_NOTIFICATION: {
+    CATALOG: "/admin/notification/catalog",
+    BROADCAST: "/admin/notification/broadcast",
+  },
 
   TRANSACTIONS: {
     ALL_TRANSACTIONS: "/broker/user-management/get-transactions",
