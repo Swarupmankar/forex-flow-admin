@@ -61,4 +61,18 @@ export const ENDPOINTS = {
     WITHDRAW_HISTORY: "/broker/admin-wallet/withdraw-history",
     REPLENISH_BALANCES: "/broker/admin-wallet/replenish-balances",
   },
+
+  IB_ADMIN: {
+    PROGRAMME: "/admin/ib-admin/programme",
+    TIERS: "/admin/ib-admin/tiers",
+    TIER_BY_ID: (id: number) => `/admin/ib-admin/tiers/${id}`,
+    TIER_RATES: (id: number) => `/admin/ib-admin/tiers/${id}/rates`,
+    PARTNERS: "/admin/ib-admin/partners",
+    PARTNER_BY_ID: (id: number) => `/admin/ib-admin/partners/${id}`,
+    MANUAL_TIER: (id: number) => `/admin/ib-admin/partners/${id}/manual-tier`,
+    ASSIGN_MANAGER: (id: number) => `/admin/ib-admin/partners/${id}/manager`,
+    PAYOUT_HOLD: (id: number) => `/admin/ib-admin/partners/${id}/payout-hold`,
+    SUSPEND_PARTNER: (id: number) => `/admin/ib-admin/partners/${id}/suspend`,
+    TRIGGER_EVALUATION: "/admin/ib-admin/evaluations/run",
+  },
 } as const;

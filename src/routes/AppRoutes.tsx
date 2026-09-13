@@ -19,6 +19,7 @@ import Login from "@/components/auth/Login";
 // Route wrapper
 import ProtectedRoute from "./ProtectedRoute";
 import PaymentSetup from "@/pages/PaymentSetup";
+import IBManagement from "@/pages/IBManagement";
 
 const AppRoutes = () => {
   return (
@@ -36,6 +37,7 @@ const AppRoutes = () => {
         <Route path="/withdrawals" element={<Withdrawals />} />
         <Route path="/accounts" element={<SpreadProfiles />} />
         <Route path="/account-types" element={<AccountTypes />} />
+        <Route path="/ib-management" element={<IBManagement />} />
         <Route path="/notifications" element={<Notifications />} />
         <Route path="/support" element={<Support />} />
         <Route path="/wallet" element={<Wallet />} />

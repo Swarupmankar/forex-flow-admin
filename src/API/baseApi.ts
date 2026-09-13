@@ -10,6 +10,7 @@ export const baseApi = createApi({
     "Notifications",
     "Transactions",
     "Accounting",
+    "IbAdmin",
   ],
 
   endpoints: () => ({}),

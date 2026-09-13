@@ -11,19 +11,25 @@ interface AuthState {
   error: string | null;
 }
 
+import { isTokenExpired } from "@/service/axiosInstance";
+
 const loadInitialState = (): AuthState => {
   try {
     const token = localStorage.getItem("token");
     const user = JSON.parse(localStorage.getItem("user") || "null");
     if (token && user) {
-      return {
-        user,
-        token,
-        isAuthenticated: true,
-        isLoading: false,
-        isError: false,
-        error: null,
-      };
+      if (isTokenExpired(token)) {
+        localStorage.clear();
+      } else {
+        return {
+          user,
+          token,
+          isAuthenticated: true,
+          isLoading: false,
+          isError: false,
+          error: null,
+        };
+      }
     }
   } catch {
     localStorage.clear();

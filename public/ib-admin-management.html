@@ -1,0 +1,246 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>IB Management Admin</title>
+  <style>
+    :root{
+      --bg:#f4f6f8;--surface:#fff;--surface-2:#f8f9fb;--text:#18212d;--muted:#6e7989;
+      --line:#e1e6ec;--dark:#15202d;--green:#168357;--green-bg:#eaf7f1;--amber:#986a13;
+      --amber-bg:#fff7df;--red:#b43d45;--red-bg:#fff0f1;--blue:#315fc3;--blue-bg:#eef3ff;
+    }
+    *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font-family:Inter,Arial,sans-serif;font-size:14px}
+    button,input,select,textarea{font:inherit}button{cursor:pointer}h1,h2,h3,p{margin-top:0}h1{margin-bottom:5px;font-size:26px}h2{margin-bottom:4px;font-size:19px}h3{margin-bottom:4px;font-size:15px}p{margin-bottom:0;color:var(--muted)}
+    .app{min-height:100vh}.topbar{height:62px;background:var(--dark);color:#fff;display:flex;align-items:center;justify-content:space-between;padding:0 24px}
+    .brand{display:flex;align-items:center;gap:10px;font-weight:700}.logo{width:30px;height:30px;border-radius:8px;background:#caf24b;color:#13202a;display:grid;place-items:center}.admin-name{color:#bbc4cf;font-size:13px}
+    .shell{display:grid;grid-template-columns:210px minmax(0,1fr);min-height:calc(100vh - 62px)}.sidebar{background:var(--surface);border-right:1px solid var(--line);padding:20px 12px}.side-label{padding:0 10px 8px;color:#919baa;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.08em}
+    .nav-btn{width:100%;border:0;background:transparent;color:#526071;border-radius:8px;padding:10px 12px;text-align:left;font-weight:600;margin-bottom:4px}.nav-btn.active{background:#edf0f3;color:var(--text)}
+    .content{padding:26px;min-width:0}.page-head{display:flex;align-items:flex-end;justify-content:space-between;gap:16px;margin-bottom:20px}.page-actions{display:flex;gap:9px;flex-wrap:wrap}
+    .button{border:1px solid var(--line);background:var(--surface);color:var(--text);border-radius:8px;padding:9px 13px;font-weight:650}.button.primary{background:var(--dark);border-color:var(--dark);color:#fff}.button.danger{color:var(--red)}.button.small{padding:6px 9px;font-size:12px}.button.link{border:0;background:transparent;color:var(--blue);padding-left:4px;padding-right:4px}
+    .summary{display:grid;grid-template-columns:repeat(5,minmax(130px,1fr));gap:12px;margin-bottom:16px}.stat{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:14px}.stat-label{display:block;color:var(--muted);font-size:12px;margin-bottom:7px}.stat strong{font-size:20px}.stat small{display:block;color:var(--green);margin-top:5px}
+    .panel{background:var(--surface);border:1px solid var(--line);border-radius:12px;overflow:hidden}.panel-head{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:15px 16px;border-bottom:1px solid var(--line)}
+    .toolbar{display:flex;gap:9px;align-items:center;flex-wrap:wrap}.control{min-height:38px;border:1px solid var(--line);border-radius:8px;background:var(--surface);color:var(--text);padding:8px 10px}.search{min-width:230px}.table-wrap{overflow:auto}table{width:100%;border-collapse:collapse;min-width:940px}th,td{padding:12px 14px;border-bottom:1px solid var(--line);text-align:left;vertical-align:middle}th{background:var(--surface-2);color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.05em;white-space:nowrap}tbody tr:hover{background:#fbfcfd}tbody tr:last-child td{border-bottom:0}
+    .name{font-weight:700}.sub{display:block;color:var(--muted);font-size:12px;margin-top:3px}.num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}.actions{display:flex;gap:6px;white-space:nowrap}.badge{display:inline-flex;align-items:center;border-radius:999px;padding:4px 8px;font-size:11px;font-weight:700}.active-badge{background:var(--green-bg);color:var(--green)}.pending-badge{background:var(--amber-bg);color:var(--amber)}.inactive-badge{background:#eef1f4;color:#6e7989}.alert-badge{background:var(--red-bg);color:var(--red)}
+    .account-pills{display:flex;flex-wrap:wrap;gap:4px}.mini-pill{background:#eff2f5;border-radius:5px;padding:3px 6px;color:#536071;font-size:11px}.empty{padding:34px;text-align:center;color:var(--muted)}
+    .progress{height:7px;background:#e8ecf0;border-radius:999px;overflow:hidden;margin-top:7px}.progress span{display:block;height:100%;background:var(--green);border-radius:999px}
+    dialog{width:min(980px,calc(100% - 28px));max-height:90vh;border:0;border-radius:14px;padding:0;background:var(--surface);color:var(--text);box-shadow:0 24px 80px rgba(20,31,43,.24)}dialog::backdrop{background:rgba(16,24,35,.5)}
+    .dialog-head{display:flex;align-items:flex-start;justify-content:space-between;gap:14px;padding:18px 20px;border-bottom:1px solid var(--line);position:sticky;top:0;background:var(--surface);z-index:2}.dialog-body{padding:20px;overflow:auto}.dialog-foot{display:flex;align-items:center;justify-content:flex-end;gap:9px;padding:14px 20px;border-top:1px solid var(--line);position:sticky;bottom:0;background:var(--surface)}.close{border:0;background:transparent;font-size:23px;color:var(--muted);padding:0 4px}
+    .form-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:13px}.field{display:grid;gap:6px;font-size:12px;font-weight:700;color:#445061}.field input,.field select,.field textarea{width:100%;min-height:40px;border:1px solid var(--line);border-radius:8px;padding:9px 10px;color:var(--text);background:var(--surface)}.field textarea{min-height:70px;resize:vertical}.span2{grid-column:span 2}.span4{grid-column:1/-1}
+    .section-title{display:flex;justify-content:space-between;align-items:center;gap:12px;margin:22px 0 10px}.section-title:first-child{margin-top:0}.account-select{display:grid;grid-template-columns:repeat(4,1fr);gap:9px}.account-option{position:relative;display:block;border:1px solid var(--line);border-radius:8px;padding:11px;font-weight:600}.account-option:has(input:checked){border-color:var(--dark);background:var(--surface-2)}.account-option input{position:absolute;right:10px;top:10px}.account-option small{display:block;color:var(--muted);font-weight:400;margin-top:4px}.option-status{color:var(--red)!important}.account-option:has(input:checked) .option-status{color:var(--green)!important}
+    .rates-table{min-width:760px}.rates-table td,.rates-table th{padding:8px}.rates-table input{width:100%;min-width:74px;border:1px solid var(--line);border-radius:7px;padding:8px;text-align:right}.rates-table .symbol-input{text-align:left;min-width:115px;text-transform:uppercase}.rates-table .hidden{display:none}.remove-symbol{border:0;background:transparent;color:var(--red);font-size:18px;padding:4px}
+    .rule-note{padding:11px 12px;border-radius:8px;background:var(--blue-bg);color:#294d98;line-height:1.5;margin-top:12px}.rule-note strong{color:#203e7b}.policy-checks{display:grid;grid-template-columns:repeat(2,1fr);gap:9px}.check-row{display:flex;align-items:flex-start;gap:8px;border:1px solid var(--line);border-radius:8px;padding:10px;font-weight:600;color:#445061}.check-row input{margin-top:2px}.check-row small{display:block;color:var(--muted);font-weight:400;margin-top:3px}
+    .detail-grid{display:grid;grid-template-columns:1.05fr .95fr;gap:16px}.detail-card{border:1px solid var(--line);border-radius:10px;padding:15px}.detail-list{display:grid;grid-template-columns:1fr 1fr;gap:13px;margin-top:13px}.detail-item span{display:block;color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.04em;margin-bottom:4px}.detail-item strong{font-size:13px}.wide{grid-column:1/-1}.note{width:100%;min-height:76px;border:1px solid var(--line);border-radius:8px;padding:9px;resize:vertical}.warning{padding:11px 12px;border-radius:8px;background:var(--amber-bg);color:#765416;margin-top:13px}.ib-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px}.detail-table{min-width:620px}.detail-table th,.detail-table td{padding:9px 10px}
+    .toast{position:fixed;right:22px;bottom:22px;background:var(--dark);color:#fff;border-radius:99px;padding:11px 15px;box-shadow:0 10px 30px rgba(0,0,0,.2);display:none;z-index:20}.toast.show{display:block}
+    @media(max-width:980px){.summary{grid-template-columns:repeat(3,1fr)}.form-grid{grid-template-columns:repeat(2,1fr)}.span4{grid-column:1/-1}.detail-grid{grid-template-columns:1fr}.policy-checks{grid-template-columns:1fr}}
+    @media(max-width:720px){.shell{grid-template-columns:1fr}.sidebar{display:flex;border-right:0;border-bottom:1px solid var(--line);padding:8px}.side-label{display:none}.nav-btn{margin:0}.content{padding:18px}.page-head{align-items:flex-start;flex-direction:column}.summary{grid-template-columns:1fr 1fr}.account-select{grid-template-columns:1fr 1fr}}
+    @media(max-width:480px){.summary,.form-grid,.account-select{grid-template-columns:1fr}.span2,.span4{grid-column:auto}.detail-list{grid-template-columns:1fr}}
+  </style>
+</head>
+<body>
+  <div class="app">
+    <header class="topbar"><div class="brand"><span class="logo">M</span>Movement Markets Admin</div><span class="admin-name">Administrator</span></header>
+    <div class="shell">
+      <aside class="sidebar">
+        <div class="side-label">IB programme</div>
+        <button class="nav-btn active" data-page="tiers" type="button">Tier management</button>
+        <button class="nav-btn" data-page="ibs" type="button">IB management</button>
+      </aside>
+
+      <main class="content">
+        <section id="tiersPage" class="page-section">
+          <div class="page-head">
+            <div><h1>Partner tiers</h1><p>Create tiers, connect account types and set a direct rate for every symbol.</p></div>
+            <div class="page-actions"><button class="button primary" id="addTier" type="button">+ Add tier</button></div>
+          </div>
+          <div class="panel">
+            <div class="panel-head">
+              <div><h2>All tiers</h2><p id="tierCount">6 tiers configured</p></div>
+              <div class="toolbar"><input class="control search" id="tierSearch" placeholder="Search tier"></div>
+            </div>
+            <div class="table-wrap">
+              <table id="tierTable">
+                <thead><tr><th>Tier</th><th>Qualification</th><th>Account types</th><th class="num">Symbols</th><th class="num">Assigned IBs</th><th>Status</th><th>Actions</th></tr></thead>
+                <tbody>
+                  <tr data-name="Associate"><td><span class="name">Associate</span><span class="sub">Level 1</span></td><td>0 lots · 0 active traders</td><td><div class="account-pills"><span class="mini-pill">Standard</span><span class="mini-pill">Pro</span><span class="mini-pill">Raw</span><span class="mini-pill">Zero</span></div></td><td class="num">42</td><td class="num">81</td><td><span class="badge active-badge">Active</span></td><td><div class="actions"><button class="button small edit-tier">Edit</button><button class="button small manage-rates">Rates</button><button class="button small danger delete-tier">Delete</button></div></td></tr>
+                  <tr data-name="Partner"><td><span class="name">Partner</span><span class="sub">Level 2</span></td><td>500 lots · 5 active traders</td><td><div class="account-pills"><span class="mini-pill">Standard</span><span class="mini-pill">Pro</span><span class="mini-pill">Raw</span><span class="mini-pill">Zero</span></div></td><td class="num">42</td><td class="num">64</td><td><span class="badge active-badge">Active</span></td><td><div class="actions"><button class="button small edit-tier">Edit</button><button class="button small manage-rates">Rates</button><button class="button small danger delete-tier">Delete</button></div></td></tr>
+                  <tr data-name="Senior Partner"><td><span class="name">Senior Partner</span><span class="sub">Level 3</span></td><td>1,500 lots · 15 active traders</td><td><div class="account-pills"><span class="mini-pill">Standard</span><span class="mini-pill">Pro</span><span class="mini-pill">Raw</span><span class="mini-pill">Zero</span></div></td><td class="num">42</td><td class="num">48</td><td><span class="badge active-badge">Active</span></td><td><div class="actions"><button class="button small edit-tier">Edit</button><button class="button small manage-rates">Rates</button><button class="button small danger delete-tier">Delete</button></div></td></tr>
+                  <tr data-name="Elite"><td><span class="name">Elite</span><span class="sub">Level 4</span></td><td>3,000 lots · 30 active traders</td><td><div class="account-pills"><span class="mini-pill">Standard</span><span class="mini-pill">Pro</span><span class="mini-pill">Raw</span><span class="mini-pill">Zero</span></div></td><td class="num">42</td><td class="num">31</td><td><span class="badge active-badge">Active</span></td><td><div class="actions"><button class="button small edit-tier">Edit</button><button class="button small manage-rates">Rates</button><button class="button small danger delete-tier">Delete</button></div></td></tr>
+                  <tr data-name="Director"><td><span class="name">Director</span><span class="sub">Level 5</span></td><td>7,500 lots · 60 active traders</td><td><div class="account-pills"><span class="mini-pill">Standard</span><span class="mini-pill">Pro</span><span class="mini-pill">Raw</span><span class="mini-pill">Zero</span></div></td><td class="num">42</td><td class="num">18</td><td><span class="badge active-badge">Active</span></td><td><div class="actions"><button class="button small edit-tier">Edit</button><button class="button small manage-rates">Rates</button><button class="button small danger delete-tier">Delete</button></div></td></tr>
+                  <tr data-name="Managing Partner"><td><span class="name">Managing Partner</span><span class="sub">Level 6</span></td><td>15,000 lots · 120 active traders</td><td><div class="account-pills"><span class="mini-pill">Standard</span><span class="mini-pill">Pro</span><span class="mini-pill">Raw</span><span class="mini-pill">Zero</span></div></td><td class="num">42</td><td class="num">6</td><td><span class="badge inactive-badge">Inactive</span></td><td><div class="actions"><button class="button small edit-tier">Edit</button><button class="button small manage-rates">Rates</button><button class="button small danger delete-tier">Delete</button></div></td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <section id="ibsPage" class="page-section" hidden>
+          <div class="page-head">
+            <div><h1>IB management</h1><p>Monitor every partner's compliance, clients, trading volume, commissions and payouts.</p></div>
+            <div class="page-actions"><button class="button" type="button">Export report</button><button class="button primary" type="button">+ Add IB</button></div>
+          </div>
+          <div class="summary">
+            <div class="stat"><span class="stat-label">Total IBs</span><strong>248</strong><small>+12 this month</small></div>
+            <div class="stat"><span class="stat-label">Active IBs</span><strong>196</strong><small>79% of total</small></div>
+            <div class="stat"><span class="stat-label">MTD volume</span><strong>18,450 lots</strong><small>+8.4% vs last month</small></div>
+            <div class="stat"><span class="stat-label">Pending payouts</span><strong>$84,290</strong><small>Next run: 15 Sep</small></div>
+            <div class="stat"><span class="stat-label">Needs review</span><strong>7</strong><small style="color:var(--amber)">KYC or payment holds</small></div>
+          </div>
+          <div class="panel">
+            <div class="panel-head">
+              <div><h2>All introducing brokers</h2><p>248 registered partners</p></div>
+              <div class="toolbar">
+                <input class="control search" id="ibSearch" placeholder="Search name, email or IB ID">
+                <select class="control" id="tierFilter"><option value="">All tiers</option><option>Associate</option><option>Partner</option><option>Senior Partner</option><option>Elite</option><option>Director</option></select>
+                <select class="control" id="statusFilter"><option value="">All statuses</option><option>Active</option><option>Pending</option><option>Suspended</option></select>
+              </div>
+            </div>
+            <div class="table-wrap">
+              <table id="ibTable">
+                <thead><tr><th>IB</th><th>Status / KYC</th><th>Tier</th><th class="num">Clients</th><th class="num">MTD lots</th><th class="num">MTD commission</th><th class="num">Pending payout</th><th>Manager</th><th>Last active</th><th></th></tr></thead>
+                <tbody>
+                  <tr data-tier="Senior Partner" data-status="Active"><td><span class="name">Aarav Sharma</span><span class="sub">IB-10482 · India · aarav@example.com</span></td><td><span class="badge active-badge">Active</span><span class="sub">KYC verified</span></td><td>Senior Partner<span class="sub">62% to Elite</span></td><td class="num">31 / 63<span class="sub">active / total</span></td><td class="num">1,842.4</td><td class="num">$14,906</td><td class="num">$6,240</td><td>Neha S.</td><td>12 min ago</td><td><button class="button small view-ib">View</button></td></tr>
+                  <tr data-tier="Elite" data-status="Active"><td><span class="name">Maya Trading LLC</span><span class="sub">IB-10371 · UAE · ops@maya.example</span></td><td><span class="badge active-badge">Active</span><span class="sub">KYC verified</span></td><td>Elite<span class="sub">41% to Director</span></td><td class="num">52 / 108<span class="sub">active / total</span></td><td class="num">4,925.8</td><td class="num">$31,762</td><td class="num">$18,430</td><td>Rahul M.</td><td>1 hr ago</td><td><button class="button small view-ib">View</button></td></tr>
+                  <tr data-tier="Partner" data-status="Pending"><td><span class="name">James Okafor</span><span class="sub">IB-10604 · Nigeria · james@example.com</span></td><td><span class="badge pending-badge">Pending</span><span class="sub">KYC review</span></td><td>Partner<span class="sub">18% to Senior</span></td><td class="num">7 / 19<span class="sub">active / total</span></td><td class="num">684.2</td><td class="num">$4,103</td><td class="num">$4,103</td><td>Unassigned</td><td>Yesterday</td><td><button class="button small view-ib">View</button></td></tr>
+                  <tr data-tier="Director" data-status="Active"><td><span class="name">Atlas Capital Partners</span><span class="sub">IB-09841 · UK · finance@atlas.example</span></td><td><span class="badge active-badge">Active</span><span class="sub">KYC verified</span></td><td>Director<span class="sub">76% to Managing</span></td><td class="num">97 / 184<span class="sub">active / total</span></td><td class="num">11,208.1</td><td class="num">$68,921</td><td class="num">$25,510</td><td>Neha S.</td><td>3 hrs ago</td><td><button class="button small view-ib">View</button></td></tr>
+                  <tr data-tier="Associate" data-status="Suspended"><td><span class="name">Leon Fischer</span><span class="sub">IB-10577 · Germany · leon@example.com</span></td><td><span class="badge alert-badge">Suspended</span><span class="sub">Payment review</span></td><td>Associate<span class="sub">Manual hold</span></td><td class="num">2 / 8<span class="sub">active / total</span></td><td class="num">92.7</td><td class="num">$611</td><td class="num">$611</td><td>Rahul M.</td><td>4 days ago</td><td><button class="button small view-ib">View</button></td></tr>
+                </tbody>
+              </table>
+              <div id="ibEmpty" class="empty" hidden>No IBs match these filters.</div>
+            </div>
+          </div>
+        </section>
+      </main>
+    </div>
+  </div>
+
+  <dialog id="tierDialog">
+    <form method="dialog" id="tierForm">
+      <div class="dialog-head"><div><h2 id="tierDialogTitle">Edit tier</h2><p>Qualification, rewards and availability.</p></div><button class="close" value="cancel" aria-label="Close">×</button></div>
+      <div class="dialog-body">
+        <div class="section-title"><div><h3>Tier requirements</h3><p>Both requirements must be met for an automatic upgrade.</p></div></div>
+        <div class="form-grid">
+          <label class="field">Tier name<input id="editTierName" value="Senior Partner" required></label>
+          <label class="field">Level order<input type="number" value="3" min="1"></label>
+          <label class="field">Minimum lots<input type="number" value="1500" min="0"></label>
+          <label class="field">Active traders<input type="number" value="15" min="0"></label>
+          <label class="field">Qualification rule<select><option selected>Meet both requirements</option><option>Meet either requirement</option></select></label>
+          <label class="field">Status<select><option selected>Active</option><option>Inactive</option></select></label>
+        </div>
+
+        <div class="section-title"><div><h3>Evaluation period</h3><p>Choose which activity is counted at each evaluation.</p></div></div>
+        <div class="form-grid">
+          <label class="field">Period<select id="evaluationPeriod"><option value="monthly" selected>Calendar month</option><option value="rolling">Rolling 30 days</option><option value="lifetime">Lifetime</option></select></label>
+          <label class="field">Programme timezone<select><option selected>UTC</option><option>Asia Kolkata</option></select></label>
+          <label class="field">Evaluation time<input type="time" value="00:05"></label>
+          <label class="field">Active trader definition<select><option selected>At least 1 closed lot in period</option><option>At least 1 closed trade in period</option></select></label>
+          <div class="rule-note span4" id="evaluationExplanation"><strong>Calendar month:</strong> Evaluated on the first day of each month using the complete previous calendar month. The new tier starts only after that evaluation.</div>
+        </div>
+
+        <div class="section-title"><div><h3>Upgrade and downgrade handling</h3><p>Tier changes affect future trades and never recalculate past accruals.</p></div></div>
+        <div class="policy-checks">
+          <label class="check-row"><input type="checkbox" checked><span>Automatic upgrades<small>Move directly to the highest tier whose requirements are met.</small></span></label>
+          <label class="check-row"><input id="autoDowngrade" type="checkbox" checked><span>Automatic downgrades<small>Start an at-risk period when either current-tier requirement is missed.</small></span></label>
+        </div>
+        <div class="form-grid" style="margin-top:12px">
+          <label class="field">Downgrade grace<select id="downgradeGrace"><option selected>1 full evaluation cycle</option><option>2 evaluation cycles</option><option>No grace period</option></select></label>
+          <label class="field">Maximum downgrade<select><option selected>One tier per evaluation</option><option>Move to qualified tier immediately</option></select></label>
+          <label class="field">New rate starts<select><option selected>At tier effective time</option></select></label>
+          <label class="field">Recovery during grace<select><option selected>Clear risk flag and keep tier</option></select></label>
+        </div>
+
+        <div class="section-title"><div><h3>One-time bonus</h3><p>Paid only the first time the IB reaches this tier.</p></div></div>
+        <div class="form-grid">
+          <label class="field">Bonus amount (USD)<input type="number" value="1000" min="0"></label>
+          <label class="field">Eligibility trigger<select><option selected>When upgrade becomes effective</option></select></label>
+          <label class="field">Payment timing<select><option selected>Next payout run within 5 business days</option><option>Next monthly payout</option></select></label>
+          <label class="field">After downgrade and re-entry<select><option selected>Do not pay bonus again</option></select></label>
+          <label class="field span4">Benefits<textarea>Dedicated partner manager, branded merch kit</textarea></label>
+          <div class="rule-note span4"><strong>Bonus rule:</strong> Create the bonus once when the tier first becomes effective. A downgrade does not claw it back, and returning to the same tier does not create another bonus. Fraud or a confirmed calculation correction requires a separate audited reversal.</div>
+        </div>
+      </div>
+      <div class="dialog-foot"><button class="button" value="cancel">Cancel</button><button class="button primary" id="saveTier" value="default">Save tier</button></div>
+    </form>
+  </dialog>
+
+  <dialog id="ratesDialog">
+    <form method="dialog" id="ratesForm">
+      <div class="dialog-head"><div><h2 id="ratesTitle">Senior Partner commission rates</h2><p>Final USD payout per closed standard lot. Every row is one individual symbol.</p></div><button class="close" value="cancel" aria-label="Close">×</button></div>
+      <div class="dialog-body">
+        <div class="form-grid">
+          <label class="field">Changes effective from<input type="datetime-local" value="2026-09-12T00:00"></label>
+          <label class="field span2">Change reason<input value="Scheduled tier rate update" required></label>
+        </div>
+        <div class="section-title"><div><h3>Connected account types</h3><p>Untick an account type to remove it from this tier.</p></div></div>
+        <div class="account-select">
+          <label class="account-option"><input class="rate-account" type="checkbox" data-rate-column="standard" checked>Standard<small>ID: standard_usd</small><small class="option-status">Commission enabled</small></label>
+          <label class="account-option"><input class="rate-account" type="checkbox" data-rate-column="pro" checked>Pro<small>ID: pro_usd</small><small class="option-status">Commission enabled</small></label>
+          <label class="account-option"><input class="rate-account" type="checkbox" data-rate-column="raw" checked>Raw Spread<small>ID: raw_usd</small><small class="option-status">Commission enabled</small></label>
+          <label class="account-option"><input class="rate-account" type="checkbox" data-rate-column="zero">Zero<small>ID: zero_usd</small><small class="option-status">No commission</small></label>
+        </div>
+        <div class="rule-note"><strong>Eligibility rule:</strong> If an account type is unchecked, this tier earns no commission for any symbol traded through that account type. Checked account types continue normally. The change applies only to trades closed after the published effective time; already accrued commission remains unchanged.</div>
+        <div class="section-title"><div><h3>Commission by symbol</h3><p>Use a separate row when two symbols need different payouts.</p></div><button class="button small" id="addSymbol" type="button">+ Add symbol</button></div>
+        <div class="table-wrap">
+          <table class="rates-table" id="ratesTable">
+            <thead><tr><th>Symbol</th><th class="num rate-standard">Standard</th><th class="num rate-pro">Pro</th><th class="num rate-raw">Raw Spread</th><th class="num rate-zero">Zero</th><th></th></tr></thead>
+            <tbody>
+              <tr><td><input class="symbol-input" value="EURUSD"></td><td class="rate-standard"><input type="number" step="0.01" value="9.00"></td><td class="rate-pro"><input type="number" step="0.01" value="7.50"></td><td class="rate-raw"><input type="number" step="0.01" value="5.60"></td><td class="rate-zero"><input type="number" step="0.01" value="6.30"></td><td><button class="remove-symbol" type="button" aria-label="Remove EURUSD">×</button></td></tr>
+              <tr><td><input class="symbol-input" value="GBPUSD"></td><td class="rate-standard"><input type="number" step="0.01" value="9.00"></td><td class="rate-pro"><input type="number" step="0.01" value="7.50"></td><td class="rate-raw"><input type="number" step="0.01" value="5.60"></td><td class="rate-zero"><input type="number" step="0.01" value="6.30"></td><td><button class="remove-symbol" type="button" aria-label="Remove GBPUSD">×</button></td></tr>
+              <tr><td><input class="symbol-input" value="USDJPY"></td><td class="rate-standard"><input type="number" step="0.01" value="9.00"></td><td class="rate-pro"><input type="number" step="0.01" value="7.50"></td><td class="rate-raw"><input type="number" step="0.01" value="5.60"></td><td class="rate-zero"><input type="number" step="0.01" value="6.30"></td><td><button class="remove-symbol" type="button" aria-label="Remove USDJPY">×</button></td></tr>
+              <tr><td><input class="symbol-input" value="XAUUSD"></td><td class="rate-standard"><input type="number" step="0.01" value="13.75"></td><td class="rate-pro"><input type="number" step="0.01" value="11.25"></td><td class="rate-raw"><input type="number" step="0.01" value="8.40"></td><td class="rate-zero"><input type="number" step="0.01" value="9.40"></td><td><button class="remove-symbol" type="button" aria-label="Remove XAUUSD">×</button></td></tr>
+              <tr><td><input class="symbol-input" value="BTCUSD"></td><td class="rate-standard"><input type="number" step="0.01" value="15.00"></td><td class="rate-pro"><input type="number" step="0.01" value="12.50"></td><td class="rate-raw"><input type="number" step="0.01" value="9.40"></td><td class="rate-zero"><input type="number" step="0.01" value="10.50"></td><td><button class="remove-symbol" type="button" aria-label="Remove BTCUSD">×</button></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+      <div class="dialog-foot"><button class="button" value="cancel">Cancel</button><button class="button primary" id="saveRates" value="default">Save rates</button></div>
+    </form>
+  </dialog>
+
+  <dialog id="ibDialog">
+    <div class="dialog-head"><div><h2>Aarav Sharma</h2><p>IB-10482 · Senior Partner · Active</p></div><button class="close" id="closeIb" aria-label="Close">×</button></div>
+    <div class="dialog-body">
+      <div class="detail-grid">
+        <section class="detail-card"><h3>Identity and compliance</h3><div class="detail-list"><div class="detail-item"><span>Email</span><strong>aarav@example.com</strong></div><div class="detail-item"><span>Phone</span><strong>+91 ••••• 48210</strong></div><div class="detail-item"><span>Country</span><strong>India</strong></div><div class="detail-item"><span>Joined</span><strong>12 January 2026</strong></div><div class="detail-item"><span>KYC</span><strong style="color:var(--green)">Verified</strong></div><div class="detail-item"><span>IB agreement</span><strong style="color:var(--green)">Signed</strong></div><div class="detail-item"><span>Assigned manager</span><strong>Neha S.</strong></div><div class="detail-item"><span>Referral code</span><strong>AARAV482</strong></div></div></section>
+        <section class="detail-card"><h3>Tier progress</h3><p>Senior Partner → Elite</p><div class="detail-list"><div class="detail-item wide"><span>Trading volume</span><strong>1,842.4 / 3,000 lots</strong><div class="progress"><span style="width:61.4%"></span></div></div><div class="detail-item wide"><span>Active traders</span><strong>31 / 30 — requirement met</strong><div class="progress"><span style="width:100%"></span></div></div></div><div class="warning">Needs 1,157.6 more lots to reach Elite.</div><div class="ib-actions"><button class="button small">Change tier</button><button class="button small">View rate plan</button></div></section>
+        <section class="detail-card"><h3>Performance</h3><div class="detail-list"><div class="detail-item"><span>Total referred clients</span><strong>63</strong></div><div class="detail-item"><span>Active traders</span><strong>31</strong></div><div class="detail-item"><span>MTD volume</span><strong>1,842.4 lots</strong></div><div class="detail-item"><span>Lifetime volume</span><strong>12,750.8 lots</strong></div><div class="detail-item"><span>Referral clicks</span><strong>1,284</strong></div><div class="detail-item"><span>Registration conversion</span><strong>18.2%</strong></div></div></section>
+        <section class="detail-card"><h3>Commissions and payouts</h3><div class="detail-list"><div class="detail-item"><span>MTD commission</span><strong>$14,906</strong></div><div class="detail-item"><span>Pending payout</span><strong>$6,240</strong></div><div class="detail-item"><span>Lifetime paid</span><strong>$82,416</strong></div><div class="detail-item"><span>Next payout</span><strong>15 September 2026</strong></div><div class="detail-item"><span>Payout method</span><strong>USDT · TRC20</strong></div><div class="detail-item"><span>Payout status</span><strong style="color:var(--green)">Enabled</strong></div></div><div class="ib-actions"><button class="button small">View ledger</button><button class="button small">Hold payout</button></div></section>
+        <section class="detail-card wide"><div class="section-title"><div><h3>Recently referred clients</h3><p>Latest activity from clients connected to this IB.</p></div><button class="button small">View all clients</button></div><div class="table-wrap"><table class="detail-table"><thead><tr><th>Client</th><th>Account type</th><th>KYC</th><th class="num">MTD lots</th><th class="num">Commission generated</th><th>Last trade</th></tr></thead><tbody><tr><td>Rohan Mehta<span class="sub">CL-28371</span></td><td>Standard</td><td><span class="badge active-badge">Verified</span></td><td class="num">284.7</td><td class="num">$2,562</td><td>Today</td></tr><tr><td>Priya Shah<span class="sub">CL-28019</span></td><td>Raw Spread</td><td><span class="badge active-badge">Verified</span></td><td class="num">192.1</td><td class="num">$1,076</td><td>Today</td></tr><tr><td>Kunal Joshi<span class="sub">CL-27744</span></td><td>Pro</td><td><span class="badge pending-badge">Review</span></td><td class="num">96.4</td><td class="num">$723</td><td>Yesterday</td></tr></tbody></table></div></section>
+        <section class="detail-card wide"><h3>Internal admin notes</h3><textarea class="note" placeholder="Add a note visible only to administrators...">Quarterly account review completed. No commission disputes.</textarea><div class="ib-actions"><button class="button small">Save note</button><button class="button small">Assign manager</button><button class="button small danger" id="suspendIb">Suspend IB</button></div></section>
+      </div>
+    </div>
+  </dialog>
+
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+  <script>
+    const toast=document.getElementById('toast');
+    function notify(message){toast.textContent=message;toast.classList.add('show');setTimeout(()=>toast.classList.remove('show'),2200)}
+    document.querySelectorAll('.nav-btn').forEach(btn=>btn.addEventListener('click',()=>{
+      document.querySelectorAll('.nav-btn').forEach(x=>x.classList.remove('active'));btn.classList.add('active');
+      document.getElementById('tiersPage').hidden=btn.dataset.page!=='tiers';document.getElementById('ibsPage').hidden=btn.dataset.page!=='ibs';
+    }));
+    const tierDialog=document.getElementById('tierDialog'),ratesDialog=document.getElementById('ratesDialog'),ibDialog=document.getElementById('ibDialog');
+    document.getElementById('addTier').addEventListener('click',()=>{document.getElementById('tierDialogTitle').textContent='Add tier';document.getElementById('editTierName').value='';tierDialog.showModal()});
+    document.addEventListener('click',e=>{
+      if(e.target.classList.contains('edit-tier')){const name=e.target.closest('tr').dataset.name;document.getElementById('tierDialogTitle').textContent='Edit tier';document.getElementById('editTierName').value=name;tierDialog.showModal()}
+      if(e.target.classList.contains('manage-rates')){const name=e.target.closest('tr').dataset.name;document.getElementById('ratesTitle').textContent=name+' commission rates';ratesDialog.showModal()}
+      if(e.target.classList.contains('delete-tier')){const row=e.target.closest('tr'),name=row.dataset.name;if(confirm('Delete '+name+'? Existing IBs must be moved to another tier first.')){row.remove();updateTierCount();notify(name+' deleted from this demo.')}}
+      if(e.target.classList.contains('view-ib'))ibDialog.showModal();
+      if(e.target.classList.contains('remove-symbol'))e.target.closest('tr').remove();
+    });
+    document.getElementById('saveTier').addEventListener('click',()=>notify('Tier details saved.'));
+    document.getElementById('saveRates').addEventListener('click',()=>notify('Account types and symbol rates saved.'));
+    document.getElementById('closeIb').addEventListener('click',()=>ibDialog.close());
+    document.getElementById('suspendIb').addEventListener('click',()=>{if(confirm('Suspend this IB and pause future payouts?'))notify('IB suspended in this demo.')});
+    function updateTierCount(){document.getElementById('tierCount').textContent=document.querySelectorAll('#tierTable tbody tr').length+' tiers configured'}
+    document.getElementById('tierSearch').addEventListener('input',e=>document.querySelectorAll('#tierTable tbody tr').forEach(row=>row.hidden=!row.dataset.name.toLowerCase().includes(e.target.value.toLowerCase())));
+    function filterIbs(){const q=document.getElementById('ibSearch').value.toLowerCase(),tier=document.getElementById('tierFilter').value,status=document.getElementById('statusFilter').value;let shown=0;document.querySelectorAll('#ibTable tbody tr').forEach(row=>{const visible=row.textContent.toLowerCase().includes(q)&&(!tier||row.dataset.tier===tier)&&(!status||row.dataset.status===status);row.hidden=!visible;if(visible)shown++});document.getElementById('ibEmpty').hidden=shown!==0}
+    ['ibSearch','tierFilter','statusFilter'].forEach(id=>document.getElementById(id).addEventListener(id==='ibSearch'?'input':'change',filterIbs));
+    function applyAccountEligibility(box){document.querySelectorAll('.rate-'+box.dataset.rateColumn).forEach(cell=>cell.classList.toggle('hidden',!box.checked));const status=box.closest('.account-option').querySelector('.option-status');status.textContent=box.checked?'Commission enabled':'No commission'}
+    document.querySelectorAll('.rate-account').forEach(box=>{applyAccountEligibility(box);box.addEventListener('change',()=>applyAccountEligibility(box))});
+    const evaluationText={monthly:'<strong>Calendar month:</strong> Evaluated on the first day of each month using the complete previous calendar month. The new tier applies only after evaluation; earlier trades keep their original rate.',rolling:'<strong>Rolling 30 days:</strong> Evaluated daily using the immediately preceding 30 days. The window moves forward every day. A downgrade requires 30 consecutive days below a current-tier requirement.',lifetime:'<strong>Lifetime:</strong> Counts all eligible activity since IB approval. It is normally upgrade-only because totals do not reduce over time; automatic downgrade is switched off except for reversals or manual compliance action.'};
+    document.getElementById('evaluationPeriod').addEventListener('change',e=>{document.getElementById('evaluationExplanation').innerHTML=evaluationText[e.target.value];if(e.target.value==='lifetime')document.getElementById('autoDowngrade').checked=false});
+    document.getElementById('addSymbol').addEventListener('click',()=>{const row=document.createElement('tr');row.innerHTML='<td><input class="symbol-input" placeholder="SYMBOL"></td><td class="rate-standard"><input type="number" step="0.01" placeholder="0.00"></td><td class="rate-pro"><input type="number" step="0.01" placeholder="0.00"></td><td class="rate-raw"><input type="number" step="0.01" placeholder="0.00"></td><td class="rate-zero"><input type="number" step="0.01" placeholder="0.00"></td><td><button class="remove-symbol" type="button" aria-label="Remove symbol">×</button></td>';document.querySelector('#ratesTable tbody').appendChild(row);document.querySelectorAll('.rate-account:not(:checked)').forEach(box=>row.querySelectorAll('.rate-'+box.dataset.rateColumn).forEach(cell=>cell.classList.add('hidden')));row.querySelector('input').focus()});
+  </script>
+</body>
+</html>

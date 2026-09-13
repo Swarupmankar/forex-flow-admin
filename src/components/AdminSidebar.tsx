@@ -19,12 +19,14 @@ import {
   User,
   LogOut,
   MessageCircle,
+  Award,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const navigationItems = [
   { title: "Dashboard", url: "/", icon: LayoutDashboard },
   { title: "Clients", url: "/clients", icon: Users },
+  { title: "IB Management", url: "/ib-management", icon: Award },
 
   { title: "Deposit Requests", url: "/deposits", icon: TrendingUp },
   { title: "Transaction History", url: "/deposit-history", icon: TrendingUp },
