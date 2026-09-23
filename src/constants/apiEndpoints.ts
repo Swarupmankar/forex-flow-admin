@@ -62,6 +62,14 @@ export const ENDPOINTS = {
     REPLENISH_BALANCES: "/broker/admin-wallet/replenish-balances",
   },
 
+  // The broker's bank / UPI receiving details, shown to clients on the
+  // bank / UPI deposit screen.
+  PAYMENT_DETAILS: {
+    CURRENT: "/broker/pg-details",
+    UPDATE: "/broker/pg-details/update",
+    HISTORY: "/broker/pg-details/history",
+  },
+
   IB_ADMIN: {
     PROGRAMME: "/admin/ib-admin/programme",
     TIERS: "/admin/ib-admin/tiers",

@@ -11,6 +11,7 @@ export const baseApi = createApi({
     "Transactions",
     "Accounting",
     "IbAdmin",
+    "PaymentDetails",
   ],
 
   endpoints: () => ({}),

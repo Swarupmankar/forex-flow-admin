@@ -1,229 +1,429 @@
-import React, { useState } from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import React, { useEffect, useMemo, useState } from "react";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
-import { Upload, Trash2, CreditCard, Wallet, Building2 } from "lucide-react";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { useToast } from "@/components/ui/use-toast";
+import { AlertCircle, Building2, CheckCircle2, History, Loader2, QrCode, RotateCcw, Trash2 } from "lucide-react";
 import { DashboardLayout } from "@/components/DashboardLayout";
+import {
+  apiErrorMessage,
+  useGetPaymentDetailsHistoryQuery,
+  useGetPaymentDetailsQuery,
+  useUpdatePaymentDetailsMutation,
+  type BankDetailsPayload,
+  type PaymentDetails,
+} from "@/API/paymentDetails.api";
 
-interface PaymentMethod {
-  id: string;
-  type: "UPI" | "USDT" | "Bank Transfer";
-  status: "Active" | "Inactive";
-  details: {
-    address?: string;
-    accountNumber?: string;
-    ifscCode?: string;
-    bankName?: string;
-    holderName?: string;
-    branchName?: string;
-  };
+/**
+ * Payment Setup: the bank account and UPI ID this broker's clients pay into for
+ * bank / UPI deposits.
+ *
+ * The backend keeps ONE record per broker, so each method is edited in place:
+ * Save replaces it, Remove clears it (clients then stop seeing that method).
+ * What is saved here is exactly what clients see on the deposit screen — bank
+ * details to copy, and a UPI QR code generated from the UPI ID.
+ *
+ * Formats match what the backend accepts, so an error shows next to the field
+ * instead of after saving.
+ */
+
+const UPI_ID_PATTERN = /^[a-zA-Z0-9._-]{2,256}@[a-zA-Z][a-zA-Z0-9]{1,63}$/;
+const IFSC_PATTERN = /^[A-Z]{4}0[A-Z0-9]{6}$/;
+const BANK_ACCOUNT_NO_PATTERN = /^\d{9,18}$/;
+const BANK_NAME_PATTERN = /^[A-Za-z][A-Za-z .&()'-]{1,99}$/;
+const HOLDER_NAME_PATTERN = /^[A-Za-z][A-Za-z .&()'/,-]{1,99}$/;
+
+const upiError = (v: string) =>
+  !v.trim() ? "Enter the UPI ID." : UPI_ID_PATTERN.test(v.trim()) ? "" : "A UPI ID looks like name@bank.";
+
+const bankErrors = (b: BankDetailsPayload) => ({
+  accountHolderName: !b.accountHolderName.trim()
+    ? "Enter the account holder name."
+    : HOLDER_NAME_PATTERN.test(b.accountHolderName.trim()) ? "" : "Use letters, spaces and . & ( ) ' / , - only.",
+  bankName: !b.bankName.trim()
+    ? "Enter the bank name."
+    : BANK_NAME_PATTERN.test(b.bankName.trim()) ? "" : "Use letters, spaces and . & ( ) ' - only.",
+  bankAccountNo: !b.bankAccountNo.trim()
+    ? "Enter the account number."
+    : BANK_ACCOUNT_NO_PATTERN.test(b.bankAccountNo.trim()) ? "" : "The account number is 9–18 digits.",
+  bankIfscCode: !b.bankIfscCode.trim()
+    ? "Enter the IFSC code."
+    : IFSC_PATTERN.test(b.bankIfscCode.trim().toUpperCase()) ? "" : "An IFSC code is 11 characters, like HDFC0001234.",
+});
+
+const bankFrom = (d?: PaymentDetails): BankDetailsPayload => ({
+  bankName: d?.bankName ?? "",
+  accountHolderName: d?.accountHolderName ?? "",
+  bankAccountNo: d?.bankAccountNo ?? "",
+  bankIfscCode: d?.bankIfscCode ?? "",
+});
+const bankIsSet = (d?: PaymentDetails) =>
+  Boolean(d?.bankName && d?.bankAccountNo && d?.bankIfscCode);
+
+const maskAccount = (v: string) => (v ? `${"•".repeat(Math.max(v.length - 4, 0))}${v.slice(-4)}` : "—");
+const formatDate = (v?: string | null) =>
+  v ? new Date(v).toLocaleString(undefined, { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" }) : "—";
+
+function FieldError({ id, message }: { id: string; message: string }) {
+  if (!message) return null;
+  return (
+    <p id={id} role="alert" className="text-xs text-destructive mt-1.5 flex items-center gap-1">
+      <AlertCircle className="h-3.5 w-3.5 shrink-0" />
+      {message}
+    </p>
+  );
 }
 
-const PaymentSetup = () => {
-  const [paymentType, setPaymentType] = useState<string>("");
-  const [formData, setFormData] = useState({
-    upiId: "",
-    walletAddress: "",
-    accountNumber: "",
-    ifscCode: "",
-    bankName: "",
-    holderName: "",
-    branchName: "",
-    qrCode: null as File | null
-  });
+function StatusBadge({ live }: { live: boolean }) {
+  return live ? (
+    <Badge className="gap-1"><CheckCircle2 className="h-3 w-3" />Live for clients</Badge>
+  ) : (
+    <Badge variant="secondary">Not set up</Badge>
+  );
+}
 
-  const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[]>([
-    {
-      id: "1",
-      type: "UPI",
-      status: "Active",
-      details: { address: "admin@paytm" }
-    },
-    {
-      id: "2",
-      type: "UPI",
-      status: "Inactive",
-      details: { address: "admin@googlepay" }
-    },
-    {
-      id: "3",
-      type: "USDT",
-      status: "Active",
-      details: { address: "TKHuVq7xABcdEfGhijKLMnOpQrStUvWxYz" }
-    },
-    {
-      id: "4",
-      type: "Bank Transfer",
-      status: "Active",
-      details: {
-        bankName: "HDFC Bank",
-        accountNumber: "****3456",
-        ifscCode: "HDFC0001234",
-        holderName: "Admin Account"
-      }
-    }
-  ]);
+/* ── UPI ── */
+function UpiCard({ details }: { details: PaymentDetails }) {
+  const { toast } = useToast();
+  const [update, { isLoading: saving }] = useUpdatePaymentDetailsMutation();
+  const saved = details.upiId ?? "";
+  const [upiId, setUpiId] = useState(saved);
+  const [attempted, setAttempted] = useState(false);
+  const [confirmRemove, setConfirmRemove] = useState(false);
 
-  const handleInputChange = (field: string, value: string) => {
-    setFormData(prev => ({ ...prev, [field]: value }));
-  };
+  // Follow the server whenever the saved value changes (after a save, or a
+  // save from another tab), unless the user is mid-edit.
+  const dirty = upiId.trim() !== saved;
+  useEffect(() => {
+    if (!dirty) setUpiId(saved);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [saved]);
 
-  const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (file) {
-      setFormData(prev => ({ ...prev, qrCode: file }));
+  const error = upiId || attempted ? upiError(upiId) : "";
+
+  const save = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setAttempted(true);
+    if (upiError(upiId) || saving) return;
+    try {
+      await update({ upiId: upiId.trim() }).unwrap();
+      setAttempted(false);
+      toast({ title: "UPI ID saved", description: "Clients now see this UPI ID and its QR code on the deposit screen." });
+    } catch (err) {
+      toast({ variant: "destructive", title: "Couldn't save the UPI ID", description: apiErrorMessage(err, "Please try again.") });
     }
   };
 
-  const togglePaymentMethodStatus = (methodId: string) => {
-    setPaymentMethods(prev => 
-      prev.map(method => 
-        method.id === methodId 
-          ? { ...method, status: method.status === "Active" ? "Inactive" : "Active" as "Active" | "Inactive" }
-          : method
-      )
+  const remove = async () => {
+    try {
+      await update({ upiId: "" }).unwrap();
+      setUpiId("");
+      setAttempted(false);
+      toast({ title: "UPI removed", description: "Clients can no longer choose UPI for deposits." });
+    } catch (err) {
+      toast({ variant: "destructive", title: "Couldn't remove UPI", description: apiErrorMessage(err, "Please try again.") });
+    } finally {
+      setConfirmRemove(false);
+    }
+  };
+
+  return (
+    <Card>
+      <CardHeader className="flex flex-row items-start justify-between gap-4 space-y-0">
+        <div className="flex items-center gap-3">
+          <div className="p-2 rounded-lg bg-muted/50"><QrCode className="h-5 w-5" /></div>
+          <div>
+            <CardTitle className="text-lg">UPI</CardTitle>
+            <CardDescription>Clients scan a QR code generated from this ID.</CardDescription>
+          </div>
+        </div>
+        <StatusBadge live={Boolean(saved)} />
+      </CardHeader>
+      <CardContent>
+        <form noValidate onSubmit={save} className="space-y-4">
+          <div>
+            <Label htmlFor="pg-upi-id">UPI ID</Label>
+            <Input
+              id="pg-upi-id"
+              placeholder="business@okhdfcbank"
+              value={upiId}
+              onChange={(e) => setUpiId(e.target.value.trim())}
+              autoComplete="off"
+              spellCheck={false}
+              disabled={saving}
+              aria-invalid={Boolean(error)}
+              aria-describedby={error ? "pg-upi-id-error" : "pg-upi-id-hint"}
+            />
+            {error ? (
+              <FieldError id="pg-upi-id-error" message={error} />
+            ) : (
+              <p id="pg-upi-id-hint" className="text-xs text-muted-foreground mt-1.5">
+                Use a UPI ID registered to the business account that receives deposits.
+              </p>
+            )}
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button type="submit" disabled={saving || !dirty}>
+              {saving ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Saving…</> : saved ? "Update UPI ID" : "Save UPI ID"}
+            </Button>
+            {dirty && saved && (
+              <Button type="button" variant="ghost" disabled={saving} onClick={() => { setUpiId(saved); setAttempted(false); }}>
+                <RotateCcw className="h-4 w-4 mr-2" />Discard changes
+              </Button>
+            )}
+            {saved && (
+              <Button type="button" variant="ghost" disabled={saving} onClick={() => setConfirmRemove(true)} className="ml-auto text-destructive hover:text-destructive hover:bg-destructive/10">
+                <Trash2 className="h-4 w-4 mr-2" />Remove
+              </Button>
+            )}
+          </div>
+        </form>
+      </CardContent>
+
+      <AlertDialog open={confirmRemove} onOpenChange={(open) => !saving && setConfirmRemove(open)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Remove UPI?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Clients will no longer see {saved} or its QR code, and won't be able to choose UPI for deposits. Deposits already submitted are not affected.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={saving}>Cancel</AlertDialogCancel>
+            <AlertDialogAction disabled={saving} onClick={(e) => { e.preventDefault(); remove(); }} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+              {saving ? "Removing…" : "Remove UPI"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </Card>
+  );
+}
+
+/* ── Bank account ── */
+function BankCard({ details }: { details: PaymentDetails }) {
+  const { toast } = useToast();
+  const [update, { isLoading: saving }] = useUpdatePaymentDetailsMutation();
+  const saved = useMemo(() => bankFrom(details), [details]);
+  const live = bankIsSet(details);
+  const [form, setForm] = useState<BankDetailsPayload>(saved);
+  const [attempted, setAttempted] = useState(false);
+  const [confirmRemove, setConfirmRemove] = useState(false);
+
+  const normalized: BankDetailsPayload = {
+    bankName: form.bankName.trim(),
+    accountHolderName: form.accountHolderName.trim(),
+    bankAccountNo: form.bankAccountNo.trim(),
+    bankIfscCode: form.bankIfscCode.trim().toUpperCase(),
+  };
+  const dirty = (Object.keys(saved) as (keyof BankDetailsPayload)[]).some((k) => normalized[k] !== saved[k]);
+
+  useEffect(() => {
+    if (!dirty) setForm(saved);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [saved]);
+
+  const allErrors = bankErrors(form);
+  const shown = (k: keyof BankDetailsPayload) => (form[k] || attempted ? allErrors[k] : "");
+  const set = (k: keyof BankDetailsPayload, v: string) => setForm((f) => ({ ...f, [k]: v }));
+
+  const save = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setAttempted(true);
+    const firstBad = (Object.keys(allErrors) as (keyof BankDetailsPayload)[]).find((k) => allErrors[k]);
+    if (firstBad) {
+      document.getElementById(`pg-bank-${firstBad}`)?.focus();
+      return;
+    }
+    if (saving) return;
+    try {
+      await update(normalized).unwrap();
+      setAttempted(false);
+      toast({ title: "Bank account saved", description: "Clients now see these bank details on the deposit screen." });
+    } catch (err) {
+      toast({ variant: "destructive", title: "Couldn't save the bank account", description: apiErrorMessage(err, "Please try again.") });
+    }
+  };
+
+  const remove = async () => {
+    try {
+      await update({ bankName: "", accountHolderName: "", bankAccountNo: "", bankIfscCode: "" }).unwrap();
+      setForm({ bankName: "", accountHolderName: "", bankAccountNo: "", bankIfscCode: "" });
+      setAttempted(false);
+      toast({ title: "Bank account removed", description: "Clients can no longer choose bank transfer for deposits." });
+    } catch (err) {
+      toast({ variant: "destructive", title: "Couldn't remove the bank account", description: apiErrorMessage(err, "Please try again.") });
+    } finally {
+      setConfirmRemove(false);
+    }
+  };
+
+  const field = (
+    key: keyof BankDetailsPayload,
+    label: string,
+    placeholder: string,
+    hint: string,
+    transform: (v: string) => string = (v) => v,
+    extra: React.InputHTMLAttributes<HTMLInputElement> = {},
+  ) => {
+    const id = `pg-bank-${key}`;
+    const err = shown(key);
+    return (
+      <div>
+        <Label htmlFor={id}>{label}</Label>
+        <Input
+          id={id}
+          placeholder={placeholder}
+          value={form[key]}
+          onChange={(e) => set(key, transform(e.target.value))}
+          autoComplete="off"
+          spellCheck={false}
+          disabled={saving}
+          aria-invalid={Boolean(err)}
+          aria-describedby={err ? `${id}-error` : `${id}-hint`}
+          {...extra}
+        />
+        {err ? <FieldError id={`${id}-error`} message={err} /> : <p id={`${id}-hint`} className="text-xs text-muted-foreground mt-1.5">{hint}</p>}
+      </div>
     );
   };
 
-  const deletePaymentMethod = (methodId: string) => {
-    setPaymentMethods(prev => prev.filter(method => method.id !== methodId));
-  };
-
-  const getPaymentIcon = (type: string) => {
-    switch (type) {
-      case "UPI":
-        return <CreditCard className="h-5 w-5" />;
-      case "USDT":
-        return <Wallet className="h-5 w-5" />;
-      case "Bank Transfer":
-        return <Building2 className="h-5 w-5" />;
-      default:
-        return <CreditCard className="h-5 w-5" />;
-    }
-  };
-
-  const renderAddPaymentForm = () => {
-    switch (paymentType) {
-      case "UPI Payment":
-        return (
-          <div className="space-y-4">
-            <div>
-              <Label htmlFor="upiId">UPI ID</Label>
-              <Input
-                id="upiId"
-                placeholder="yourname@paytm"
-                value={formData.upiId}
-                onChange={(e) => handleInputChange("upiId", e.target.value)}
-              />
-            </div>
-            <div>
-              <Label>QR Code (Optional)</Label>
-              <div className="border-2 border-dashed border-muted-foreground/25 rounded-lg p-8 text-center hover:border-muted-foreground/50 transition-colors">
-                <input
-                  type="file"
-                  accept="image/*"
-                  onChange={handleFileUpload}
-                  className="hidden"
-                  id="qr-upload"
-                />
-                <label htmlFor="qr-upload" className="cursor-pointer">
-                  <Upload className="h-8 w-8 mx-auto mb-2 text-muted-foreground" />
-                  <p className="text-sm text-muted-foreground">
-                    Click to upload QR code<br />
-                    PNG, JPG up to 5MB
-                  </p>
-                </label>
-              </div>
-            </div>
-            <Button className="w-full">Add UPI Method</Button>
+  return (
+    <Card>
+      <CardHeader className="flex flex-row items-start justify-between gap-4 space-y-0">
+        <div className="flex items-center gap-3">
+          <div className="p-2 rounded-lg bg-muted/50"><Building2 className="h-5 w-5" /></div>
+          <div>
+            <CardTitle className="text-lg">Bank account</CardTitle>
+            <CardDescription>Clients pay by NEFT, RTGS or IMPS to this account.</CardDescription>
           </div>
-        );
-
-      case "USDT Wallet":
-        return (
-          <div className="space-y-4">
-            <div>
-              <Label htmlFor="walletAddress">Wallet Address</Label>
-              <Input
-                id="walletAddress"
-                placeholder="TKHuVq7xABcd..."
-                value={formData.walletAddress}
-                onChange={(e) => handleInputChange("walletAddress", e.target.value)}
-              />
-            </div>
-            <Button className="w-full">Add USDT Method</Button>
+        </div>
+        <StatusBadge live={live} />
+      </CardHeader>
+      <CardContent>
+        <form noValidate onSubmit={save} className="space-y-4">
+          <div className="grid gap-4 sm:grid-cols-2">
+            {field("accountHolderName", "Account holder name", "Movement Markets Pvt Ltd", "Exactly as registered with the bank.", (v) => v, { maxLength: 100 })}
+            {field("bankName", "Bank name", "HDFC Bank", "The bank that holds the account.", (v) => v, { maxLength: 100 })}
+            {field("bankAccountNo", "Account number", "9–18 digits", "Digits only.", (v) => v.replace(/\D/g, "").slice(0, 18), { inputMode: "numeric" })}
+            {field("bankIfscCode", "IFSC code", "HDFC0001234", "11 characters, from the cheque book or passbook.", (v) => v.replace(/[^A-Za-z0-9]/g, "").slice(0, 11).toUpperCase(), { autoCapitalize: "characters" })}
           </div>
-        );
-
-      case "Bank Transfer":
-        return (
-          <div className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <Label htmlFor="accountNumber">Account Number</Label>
-                <Input
-                  id="accountNumber"
-                  placeholder="1234567890"
-                  value={formData.accountNumber}
-                  onChange={(e) => handleInputChange("accountNumber", e.target.value)}
-                />
-              </div>
-              <div>
-                <Label htmlFor="ifscCode">IFSC Code</Label>
-                <Input
-                  id="ifscCode"
-                  placeholder="HDFC0001234"
-                  value={formData.ifscCode}
-                  onChange={(e) => handleInputChange("ifscCode", e.target.value)}
-                />
-              </div>
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <Label htmlFor="bankName">Bank Name</Label>
-                <Input
-                  id="bankName"
-                  placeholder="HDFC Bank"
-                  value={formData.bankName}
-                  onChange={(e) => handleInputChange("bankName", e.target.value)}
-                />
-              </div>
-              <div>
-                <Label htmlFor="holderName">Account Holder Name</Label>
-                <Input
-                  id="holderName"
-                  placeholder="John Doe"
-                  value={formData.holderName}
-                  onChange={(e) => handleInputChange("holderName", e.target.value)}
-                />
-              </div>
-            </div>
-            <div>
-              <Label htmlFor="branchName">Branch Name (Optional)</Label>
-              <Input
-                id="branchName"
-                placeholder="Mumbai Main Branch"
-                value={formData.branchName}
-                onChange={(e) => handleInputChange("branchName", e.target.value)}
-              />
-            </div>
-            <Button className="w-full">Add Bank Transfer Method</Button>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button type="submit" disabled={saving || !dirty}>
+              {saving ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Saving…</> : live ? "Update bank account" : "Save bank account"}
+            </Button>
+            {dirty && live && (
+              <Button type="button" variant="ghost" disabled={saving} onClick={() => { setForm(saved); setAttempted(false); }}>
+                <RotateCcw className="h-4 w-4 mr-2" />Discard changes
+              </Button>
+            )}
+            {live && (
+              <Button type="button" variant="ghost" disabled={saving} onClick={() => setConfirmRemove(true)} className="ml-auto text-destructive hover:text-destructive hover:bg-destructive/10">
+                <Trash2 className="h-4 w-4 mr-2" />Remove
+              </Button>
+            )}
           </div>
-        );
+        </form>
+      </CardContent>
 
-      default:
-        return (
-          <div className="text-center py-8 text-muted-foreground">
-            Please select a payment type to continue
+      <AlertDialog open={confirmRemove} onOpenChange={(open) => !saving && setConfirmRemove(open)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Remove bank account?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Clients will no longer see {saved.bankName} ({maskAccount(saved.bankAccountNo)}) and won't be able to choose bank transfer for deposits. Deposits already submitted are not affected.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={saving}>Cancel</AlertDialogCancel>
+            <AlertDialogAction disabled={saving} onClick={(e) => { e.preventDefault(); remove(); }} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+              {saving ? "Removing…" : "Remove bank account"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </Card>
+  );
+}
+
+/* ── History ── */
+function ChangeHistory() {
+  const { data, isLoading, isError, error, refetch, isFetching } = useGetPaymentDetailsHistoryQuery();
+  if (isLoading) return <Skeleton className="h-40 w-full" />;
+  if (isError) {
+    return (
+      <Alert variant="destructive">
+        <AlertCircle className="h-4 w-4" />
+        <AlertTitle>Couldn't load the change history</AlertTitle>
+        <AlertDescription className="flex flex-wrap items-center gap-3">
+          {apiErrorMessage(error, "Please try again.")}
+          <Button size="sm" variant="outline" onClick={() => refetch()} disabled={isFetching}>{isFetching ? "Retrying…" : "Try again"}</Button>
+        </AlertDescription>
+      </Alert>
+    );
+  }
+  const rows = data ?? [];
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-lg flex items-center gap-2"><History className="h-5 w-5" />Change history</CardTitle>
+        <CardDescription>Each row is the set of details that was replaced, and when.</CardDescription>
+      </CardHeader>
+      <CardContent>
+        {rows.length === 0 ? (
+          <p className="text-sm text-muted-foreground py-6 text-center">No changes yet.</p>
+        ) : (
+          <div className="overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Replaced on</TableHead>
+                  <TableHead>UPI ID</TableHead>
+                  <TableHead>Account holder</TableHead>
+                  <TableHead>Bank</TableHead>
+                  <TableHead>Account no.</TableHead>
+                  <TableHead>IFSC</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {rows.map((r) => (
+                  <TableRow key={r.id}>
+                    <TableCell className="whitespace-nowrap">{formatDate(r.createdAt)}</TableCell>
+                    <TableCell className="font-mono text-xs">{r.upiId || "—"}</TableCell>
+                    <TableCell>{r.accountHolderName || "—"}</TableCell>
+                    <TableCell>{r.bankName || "—"}</TableCell>
+                    <TableCell className="font-mono text-xs">{maskAccount(r.bankAccountNo)}</TableCell>
+                    <TableCell className="font-mono text-xs">{r.bankIfscCode || "—"}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
           </div>
-        );
-    }
-  };
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+const PaymentSetup = () => {
+  const { data, isLoading, isError, error, refetch, isFetching } = useGetPaymentDetailsQuery();
+  const liveCount = data ? Number(Boolean(data.upiId)) + Number(bankIsSet(data)) : 0;
 
   return (
     <DashboardLayout title="Payment Setup">
@@ -231,109 +431,55 @@ const PaymentSetup = () => {
         <div>
           <h1 className="text-3xl font-bold">Payment Setup</h1>
           <p className="text-muted-foreground">
-            Manage your payment methods and configurations
+            The UPI ID and bank account your clients pay into for bank / UPI deposits.
           </p>
         </div>
 
-        <Tabs defaultValue="add" className="space-y-6">
+        <Tabs defaultValue="methods" className="space-y-6">
           <TabsList>
-            <TabsTrigger value="add">Add Payment Method</TabsTrigger>
-            <TabsTrigger value="manage">Manage Methods</TabsTrigger>
+            <TabsTrigger value="methods">Payment methods</TabsTrigger>
+            <TabsTrigger value="history">Change history</TabsTrigger>
           </TabsList>
 
-          <TabsContent value="add" className="space-y-6">
-            <Card>
-              <CardHeader>
-                <CardTitle>Add Payment Method</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-6">
-                <div>
-                  <Label>Payment Type</Label>
-                  <Select value={paymentType} onValueChange={setPaymentType}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select payment type" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="UPI Payment">UPI Payment</SelectItem>
-                      <SelectItem value="USDT Wallet">USDT Wallet</SelectItem>
-                      <SelectItem value="Bank Transfer">Bank Transfer</SelectItem>
-                    </SelectContent>
-                  </Select>
+          <TabsContent value="methods" className="space-y-6">
+            {isLoading ? (
+              <div className="grid gap-6 lg:grid-cols-2">
+                <Skeleton className="h-64 w-full" />
+                <Skeleton className="h-64 w-full" />
+              </div>
+            ) : isError || !data ? (
+              <Alert variant="destructive">
+                <AlertCircle className="h-4 w-4" />
+                <AlertTitle>Couldn't load your payment details</AlertTitle>
+                <AlertDescription className="flex flex-wrap items-center gap-3">
+                  {apiErrorMessage(error, "Please try again.")}
+                  <Button size="sm" variant="outline" onClick={() => refetch()} disabled={isFetching}>{isFetching ? "Retrying…" : "Try again"}</Button>
+                </AlertDescription>
+              </Alert>
+            ) : (
+              <>
+                {liveCount === 0 && (
+                  <Alert>
+                    <AlertCircle className="h-4 w-4" />
+                    <AlertTitle>Bank / UPI deposits are off</AlertTitle>
+                    <AlertDescription>
+                      Clients can't deposit by bank transfer or UPI until you add at least one method below.
+                    </AlertDescription>
+                  </Alert>
+                )}
+                <div className="grid gap-6 lg:grid-cols-2 items-start">
+                  <UpiCard details={data} />
+                  <BankCard details={data} />
                 </div>
-
-                {renderAddPaymentForm()}
-              </CardContent>
-            </Card>
+                {data.updatedAt && (
+                  <p className="text-xs text-muted-foreground">Last updated {formatDate(data.updatedAt)}</p>
+                )}
+              </>
+            )}
           </TabsContent>
 
-          <TabsContent value="manage" className="space-y-6">
-            <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-3">
-              {paymentMethods.map((method) => (
-                <Card key={method.id} className="overflow-hidden">
-                  <CardContent className="p-0">
-                    {/* Header Section */}
-                    <div className="flex items-center justify-between p-4 pb-2">
-                      <div className="flex items-center gap-3">
-                        <div className="p-2 rounded-lg bg-muted/50">
-                          {getPaymentIcon(method.type)}
-                        </div>
-                        <h3 className="font-semibold text-base">{method.type}</h3>
-                      </div>
-                      <Badge variant={method.status === "Active" ? "default" : "secondary"}>
-                        {method.status}
-                      </Badge>
-                    </div>
-
-                    {/* Details Section */}
-                    <div className="p-4 py-2">
-                      <div className="space-y-3">
-                        <div>
-                          <div className="text-xs font-medium text-muted-foreground mb-1">
-                            Address/ID
-                          </div>
-                          <div className="text-sm font-mono bg-muted/50 p-2 rounded border text-wrap break-all">
-                            {method.details.address || 
-                             `${method.details.bankName} — ${method.details.accountNumber}`}
-                          </div>
-                        </div>
-                        
-                        {method.type === "Bank Transfer" && method.details.ifscCode && (
-                          <div className="grid grid-cols-1 gap-2">
-                            <div className="flex justify-between text-xs">
-                              <span className="text-muted-foreground">IFSC:</span>
-                              <span className="font-medium">{method.details.ifscCode}</span>
-                            </div>
-                            <div className="flex justify-between text-xs">
-                              <span className="text-muted-foreground">Holder:</span>
-                              <span className="font-medium">{method.details.holderName}</span>
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-
-                    {/* Actions Section */}
-                    <div className="flex items-center justify-between p-4 pt-2 bg-muted/20 border-t">
-                      <div className="flex items-center gap-2">
-                        <Switch 
-                          checked={method.status === "Active"} 
-                          onCheckedChange={() => togglePaymentMethodStatus(method.id)}
-                        />
-                        <span className="text-sm font-medium">Active</span>
-                      </div>
-                      <Button 
-                        variant="ghost" 
-                        size="sm" 
-                        onClick={() => deletePaymentMethod(method.id)}
-                        className="text-destructive hover:text-destructive hover:bg-destructive/10 h-8 w-8 p-0"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
+          <TabsContent value="history">
+            <ChangeHistory />
           </TabsContent>
         </Tabs>
       </div>
