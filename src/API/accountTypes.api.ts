@@ -15,7 +15,7 @@ export const plansApi = baseApi.injectEndpoints({
         method: "POST",
         data: body,
       }),
-      invalidatesTags: ["Users"],
+      invalidatesTags: ["Users", "IbAdmin"],
     }),
 
     //all plans
@@ -33,7 +33,7 @@ export const plansApi = baseApi.injectEndpoints({
         url: ENDPOINTS.PLANS.DELETE(id),
         method: "DELETE",
       }),
-      invalidatesTags: ["Users"],
+      invalidatesTags: ["Users", "IbAdmin"],
     }),
 
     // enable/ disbale
@@ -45,7 +45,7 @@ export const plansApi = baseApi.injectEndpoints({
         url: ENDPOINTS.PLANS.TOGGLE(id),
         method: "PATCH",
       }),
-      invalidatesTags: ["Users"],
+      invalidatesTags: ["Users", "IbAdmin"],
     }),
 
     // edit plans
@@ -58,7 +58,7 @@ export const plansApi = baseApi.injectEndpoints({
         method: "PUT",
         data: body,
       }),
-      invalidatesTags: ["Users"],
+      invalidatesTags: ["Users", "IbAdmin"],
     }),
   }),
 });

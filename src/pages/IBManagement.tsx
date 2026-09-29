@@ -1,8 +1,9 @@
 import { useState, useEffect } from "react";
 import {
   useGetProgrammeQuery,
+  useUpdateProgrammeMutation,
   useGetTiersQuery,
-  useGetPartnersQuery,
+  useGetAllPartnersQuery,
   useGetPartnerByIdQuery,
   useCreateTierMutation,
   useUpdateTierMutation,
@@ -15,6 +16,8 @@ import {
   useSuspendPartnerMutation,
   IbTier,
   IbPartnerItem,
+  IbAccountTypeOption,
+  ibAdminApi,
 } from "@/API/ibAdmin.api";
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { Button } from "@/components/ui/button";
@@ -98,67 +101,44 @@ const serializeBenefits = (list: string[]): string => {
   return JSON.stringify(filtered);
 };
 
-const DEFAULT_36_SYMBOLS: Array<{
-  symbolId: string;
-  category: "MAJORS" | "MINORS" | "METALS" | "ENERGIES" | "INDICES";
-  rates: { [acc: string]: number };
-}> = [
-  // 1. Forex Majors (7)
-  { symbolId: "EURUSD", category: "MAJORS", rates: { STANDARD: 9.0, PRO: 7.5, RAW: 5.6, ZERO: 6.3 } },
-  { symbolId: "GBPUSD", category: "MAJORS", rates: { STANDARD: 9.0, PRO: 7.5, RAW: 5.6, ZERO: 6.3 } },
-  { symbolId: "USDJPY", category: "MAJORS", rates: { STANDARD: 9.0, PRO: 7.5, RAW: 5.6, ZERO: 6.3 } },
-  { symbolId: "USDCHF", category: "MAJORS", rates: { STANDARD: 9.0, PRO: 7.5, RAW: 5.6, ZERO: 6.3 } },
-  { symbolId: "USDCAD", category: "MAJORS", rates: { STANDARD: 9.0, PRO: 7.5, RAW: 5.6, ZERO: 6.3 } },
-  { symbolId: "AUDUSD", category: "MAJORS", rates: { STANDARD: 9.0, PRO: 7.5, RAW: 5.6, ZERO: 6.3 } },
-  { symbolId: "NZDUSD", category: "MAJORS", rates: { STANDARD: 9.0, PRO: 7.5, RAW: 5.6, ZERO: 6.3 } },
+type SymbolCategory = "MAJORS" | "MINORS" | "METALS" | "ENERGIES" | "INDICES" | "CRYPTO";
 
-  // 2. Forex Minors & Crosses (21)
-  { symbolId: "EURGBP", category: "MINORS", rates: { STANDARD: 10.0, PRO: 8.5, RAW: 6.5, ZERO: 7.0 } },
-  { symbolId: "EURJPY", category: "MINORS", rates: { STANDARD: 10.0, PRO: 8.5, RAW: 6.5, ZERO: 7.0 } },
-  { symbolId: "EURCHF", category: "MINORS", rates: { STANDARD: 10.0, PRO: 8.5, RAW: 6.5, ZERO: 7.0 } },
-  { symbolId: "EURCAD", category: "MINORS", rates: { STANDARD: 10.0, PRO: 8.5, RAW: 6.5, ZERO: 7.0 } },
-  { symbolId: "EURAUD", category: "MINORS", rates: { STANDARD: 10.0, PRO: 8.5, RAW: 6.5, ZERO: 7.0 } },
-  { symbolId: "EURNZD", category: "MINORS", rates: { STANDARD: 10.0, PRO: 8.5, RAW: 6.5, ZERO: 7.0 } },
-  { symbolId: "GBPJPY", category: "MINORS", rates: { STANDARD: 10.0, PRO: 8.5, RAW: 6.5, ZERO: 7.0 } },
-  { symbolId: "GBPCHF", category: "MINORS", rates: { STANDARD: 10.0, PRO: 8.5, RAW: 6.5, ZERO: 7.0 } },
-  { symbolId: "GBPCAD", category: "MINORS", rates: { STANDARD: 10.0, PRO: 8.5, RAW: 6.5, ZERO: 7.0 } },
-  { symbolId: "GBPAUD", category: "MINORS", rates: { STANDARD: 10.0, PRO: 8.5, RAW: 6.5, ZERO: 7.0 } },
-  { symbolId: "GBPNZD", category: "MINORS", rates: { STANDARD: 10.0, PRO: 8.5, RAW: 6.5, ZERO: 7.0 } },
-  { symbolId: "AUDJPY", category: "MINORS", rates: { STANDARD: 10.0, PRO: 8.5, RAW: 6.5, ZERO: 7.0 } },
-  { symbolId: "AUDCHF", category: "MINORS", rates: { STANDARD: 10.0, PRO: 8.5, RAW: 6.5, ZERO: 7.0 } },
-  { symbolId: "AUDCAD", category: "MINORS", rates: { STANDARD: 10.0, PRO: 8.5, RAW: 6.5, ZERO: 7.0 } },
-  { symbolId: "AUDNZD", category: "MINORS", rates: { STANDARD: 10.0, PRO: 8.5, RAW: 6.5, ZERO: 7.0 } },
-  { symbolId: "NZDJPY", category: "MINORS", rates: { STANDARD: 10.0, PRO: 8.5, RAW: 6.5, ZERO: 7.0 } },
-  { symbolId: "NZDCHF", category: "MINORS", rates: { STANDARD: 10.0, PRO: 8.5, RAW: 6.5, ZERO: 7.0 } },
-  { symbolId: "NZDCAD", category: "MINORS", rates: { STANDARD: 10.0, PRO: 8.5, RAW: 6.5, ZERO: 7.0 } },
-  { symbolId: "CADJPY", category: "MINORS", rates: { STANDARD: 10.0, PRO: 8.5, RAW: 6.5, ZERO: 7.0 } },
-  { symbolId: "CHFJPY", category: "MINORS", rates: { STANDARD: 10.0, PRO: 8.5, RAW: 6.5, ZERO: 7.0 } },
-  { symbolId: "CHFCAD", category: "MINORS", rates: { STANDARD: 10.0, PRO: 8.5, RAW: 6.5, ZERO: 7.0 } },
+const FX_MAJORS = ["EURUSD", "GBPUSD", "USDJPY", "USDCHF", "USDCAD", "AUDUSD", "NZDUSD"];
 
-  // 3. Precious Metals (3)
-  { symbolId: "XAUUSD", category: "METALS", rates: { STANDARD: 13.75, PRO: 11.25, RAW: 8.4, ZERO: 9.4 } },
-  { symbolId: "XAGUSD", category: "METALS", rates: { STANDARD: 11.0, PRO: 9.5, RAW: 7.0, ZERO: 8.0 } },
-  { symbolId: "XPTUSD", category: "METALS", rates: { STANDARD: 12.0, PRO: 10.0, RAW: 7.5, ZERO: 8.5 } },
-
-  // 4. Energies / Gas & Oil (2)
-  { symbolId: "WTIUSD", category: "ENERGIES", rates: { STANDARD: 12.0, PRO: 10.0, RAW: 7.5, ZERO: 8.5 } },
-  { symbolId: "XNG/USD", category: "ENERGIES", rates: { STANDARD: 12.0, PRO: 10.0, RAW: 7.5, ZERO: 8.5 } },
-
-  // 5. Indices (3)
-  { symbolId: "US30", category: "INDICES", rates: { STANDARD: 15.0, PRO: 12.5, RAW: 9.4, ZERO: 10.5 } },
-  { symbolId: "US500", category: "INDICES", rates: { STANDARD: 15.0, PRO: 12.5, RAW: 9.4, ZERO: 10.5 } },
-  { symbolId: "NAS100", category: "INDICES", rates: { STANDARD: 15.0, PRO: 12.5, RAW: 9.4, ZERO: 10.5 } },
-];
-
-const getSymbolCategory = (sym: string): "MAJORS" | "MINORS" | "METALS" | "ENERGIES" | "INDICES" => {
-  const match = DEFAULT_36_SYMBOLS.find((s) => s.symbolId === sym);
-  if (match) return match.category;
-  if (sym.includes("XAU") || sym.includes("XAG") || sym.includes("XPT")) return "METALS";
-  if (sym.includes("OIL") || sym.includes("WTI") || sym.includes("NG")) return "ENERGIES";
-  if (sym.includes("US") || sym.includes("NAS") || sym.includes("GER") || sym.includes("UK")) return "INDICES";
-  if (["EURUSD", "GBPUSD", "USDJPY", "USDCHF", "USDCAD", "AUDUSD", "NZDUSD"].includes(sym)) return "MAJORS";
+/** Grouping for the rate matrix filter tabs only; it is not sent to the backend. */
+const getSymbolCategory = (sym: string): SymbolCategory => {
+  const s = sym.toUpperCase().replace(/[\s/._-]/g, "");
+  if (FX_MAJORS.includes(s)) return "MAJORS";
+  if (/^(BTC|ETH|LTC|XRP|SOL|DOGE|ADA|BNB)/.test(s)) return "CRYPTO";
+  if (/^(XAU|XAG|XPT|XPD)/.test(s)) return "METALS";
+  if (/(OIL|WTI|BRENT|XNG|NGAS)/.test(s)) return "ENERGIES";
+  if (/^(US\d|US500|NAS|SPX|GER|UK\d|JP\d|HK\d|AUS\d|FRA|EU\d)/.test(s)) return "INDICES";
   return "MINORS";
 };
+
+const ACCOUNT_BADGE_STYLES = [
+  "bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20",
+  "bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border-indigo-500/20",
+  "bg-purple-500/10 text-purple-600 dark:text-purple-400 border-purple-500/20",
+  "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20",
+  "bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20",
+];
+
+// Evaluation settings belong to the programme (one ladder, one mode and
+// timezone); auto-downgrade and grace belong to each tier.
+const EVAL_MODE_TO_FORM: Record<string, string> = {
+  CALENDAR_MONTH: "monthly",
+  ROLLING_30_DAYS: "rolling",
+  LIFETIME: "lifetime",
+};
+const FORM_TO_EVAL_MODE: Record<string, "CALENDAR_MONTH" | "ROLLING_30_DAYS" | "LIFETIME"> = {
+  monthly: "CALENDAR_MONTH",
+  rolling: "ROLLING_30_DAYS",
+  lifetime: "LIFETIME",
+};
+const graceToForm = (cycles?: number) =>
+  cycles === 0 ? "none" : cycles && cycles >= 2 ? "2 cycles" : "1 cycle";
+const FORM_TO_GRACE: Record<string, number> = { none: 0, "1 cycle": 1, "2 cycles": 2 };
 
 export default function IBManagement() {
   const [activeTab, setActiveTab] = useState<"tiers" | "partners">("tiers");
@@ -169,12 +149,11 @@ export default function IBManagement() {
   // RTK Query Hooks
   const { data: programmeData, isLoading: isProgLoading, refetch: refetchProg } = useGetProgrammeQuery();
   const { data: tiersData, isLoading: isTiersLoading, refetch: refetchTiers } = useGetTiersQuery();
-  const { data: partnersData, isLoading: isPartnersLoading, refetch: refetchPartners } = useGetPartnersQuery({
-    page: 1,
-    limit: 50,
-  });
+  // Every IB, loaded page by page — not just the first page
+  const { data: partnersData, isLoading: isPartnersLoading, refetch: refetchPartners } = useGetAllPartnersQuery();
 
   const [createTier] = useCreateTierMutation();
+  const [updateProgramme] = useUpdateProgrammeMutation();
   const [updateTier] = useUpdateTierMutation();
   const [deleteTier] = useDeleteTierMutation();
   const [publishTierRates] = usePublishTierRatesMutation();
@@ -215,69 +194,81 @@ export default function IBManagement() {
   const [editingRatesTier, setEditingRatesTier] = useState<IbTier | null>(null);
   const [changeReason, setChangeReason] = useState("Scheduled tier rate update");
   const [effectiveFrom, setEffectiveFrom] = useState(new Date().toISOString().slice(0, 16));
-  const [accountEligibility, setAccountEligibility] = useState<{ [key: string]: boolean }>({
-    STANDARD: true,
-    PRO: true,
-    RAW: true,
-    ZERO: false,
-  });
+  // Keyed by account type id (Account Types Management)
+  const [accountEligibility, setAccountEligibility] = useState<{ [key: string]: boolean }>({});
 
-  const { data: tierRatesData, refetch: refetchTierRates } = useGetTierRatesQuery(
+  // currentData: only this tier's rates, never the previously opened tier's.
+  // Served from cache (prefetched below); publishing or an account type change
+  // invalidates it, so no forced refetch on every open.
+  const { currentData: tierRatesData, refetch: refetchTierRates } = useGetTierRatesQuery(
     editingRatesTier?.id ?? 0,
     { skip: !editingRatesTier }
   );
+  const isTierRatesFetching = Boolean(editingRatesTier) && !tierRatesData;
 
-  const [symbolCategoryFilter, setSymbolCategoryFilter] = useState<
-    "ALL" | "MAJORS" | "MINORS" | "METALS" | "ENERGIES" | "INDICES"
-  >("ALL");
+  // Load every tier's rate card in the background once the tiers are known,
+  // so the Rates dialog opens with its matrix already there
+  const prefetchTierRates = ibAdminApi.usePrefetch("getTierRates");
+  useEffect(() => {
+    (tiersData?.data || []).forEach((t) => prefetchTierRates(t.id));
+  }, [tiersData, prefetchTierRates]);
+
+  const brokerAccountTypes: IbAccountTypeOption[] = tierRatesData?.data?.accountTypes || [];
+  const eligibleAccountTypes = brokerAccountTypes.filter((acc) => accountEligibility[acc.id] ?? true);
+
+  const [symbolCategoryFilter, setSymbolCategoryFilter] = useState<"ALL" | SymbolCategory>("ALL");
   const [symbolSearchQuery, setSymbolSearchQuery] = useState("");
 
   const [symbolRatesRows, setSymbolRatesRows] = useState<
-    Array<{ symbolId: string; category: "MAJORS" | "MINORS" | "METALS" | "ENERGIES" | "INDICES"; rates: { [acc: string]: number } }>
-  >(DEFAULT_36_SYMBOLS);
+    Array<{ symbolId: string; category: SymbolCategory; rates: { [acc: string]: number } }>
+  >([]);
 
+  // Build the matrix from the tier's published rates; a tier that has never been
+  // published starts from the broker's symbols with zero rates.
   useEffect(() => {
-    if (editingRatesTier && tierRatesData?.data?.activeVersion) {
-      const activeVer = tierRatesData.data.activeVersion;
+    if (!editingRatesTier || !tierRatesData?.data) return;
+    const { accountTypes = [], symbols = [], activeVersion } = tierRatesData.data;
 
-      if (Array.isArray(activeVer.accountTypes) && activeVer.accountTypes.length > 0) {
-        const eligMap: Record<string, boolean> = { STANDARD: true, PRO: true, RAW: true, ZERO: true };
-        activeVer.accountTypes.forEach((a: any) => {
-          eligMap[a.accountTypeId.toUpperCase()] = a.isEligible;
-        });
-        setAccountEligibility(eligMap);
-      }
+    const eligMap: Record<string, boolean> = {};
+    accountTypes.forEach((a) => {
+      eligMap[a.id] = a.isEligible;
+    });
+    setAccountEligibility(eligMap);
 
-      if (Array.isArray(activeVer.symbolRates) && activeVer.symbolRates.length > 0) {
-        const symbolMap: Record<string, Record<string, number>> = {};
-        activeVer.symbolRates.forEach((sr: any) => {
-          const sym = sr.symbolId.toUpperCase();
-          const acc = sr.accountTypeId.toUpperCase();
-          if (!symbolMap[sym]) symbolMap[sym] = { STANDARD: 0, PRO: 0, RAW: 0, ZERO: 0 };
-          symbolMap[sym][acc] = Number(sr.ratePerClosedLot);
-        });
+    const zeroRates = () => Object.fromEntries(accountTypes.map((a) => [a.id, 0])) as Record<string, number>;
+    const symbolMap: Record<string, Record<string, number>> = {};
 
-        const newRows = Object.entries(symbolMap).map(([symId, rates]) => ({
-          symbolId: symId,
-          category: getSymbolCategory(symId),
-          rates,
-        }));
-
-        setSymbolRatesRows(newRows);
-      }
+    if (Array.isArray(activeVersion?.symbolRates) && activeVersion.symbolRates.length > 0) {
+      activeVersion.symbolRates.forEach((sr: any) => {
+        const sym = String(sr.symbolId).toUpperCase();
+        if (!symbolMap[sym]) symbolMap[sym] = zeroRates();
+        symbolMap[sym][String(sr.accountTypeId)] = Number(sr.ratePerClosedLot);
+      });
+    } else {
+      symbols.forEach((sym) => {
+        symbolMap[sym.toUpperCase()] = zeroRates();
+      });
     }
+
+    setSymbolRatesRows(
+      Object.entries(symbolMap).map(([symId, rates]) => ({
+        symbolId: symId,
+        category: getSymbolCategory(symId),
+        rates,
+      }))
+    );
   }, [editingRatesTier, tierRatesData]);
 
   // Add Symbol Modal State
   const [addSymbolModalOpen, setAddSymbolModalOpen] = useState(false);
   const [newSymbolForm, setNewSymbolForm] = useState<{
     symbolId: string;
-    category: "MAJORS" | "MINORS" | "METALS" | "ENERGIES" | "INDICES";
-    rates: { STANDARD: number; PRO: number; RAW: number; ZERO: number };
+    category: SymbolCategory;
+    rates: Record<string, number>;
   }>({
     symbolId: "",
     category: "MAJORS",
-    rates: { STANDARD: 9.0, PRO: 7.5, RAW: 5.6, ZERO: 6.3 },
+    rates: {},
   });
 
   // Delete Symbol Confirmation Modal State
@@ -292,7 +283,7 @@ export default function IBManagement() {
     setNewSymbolForm({
       symbolId: "",
       category: "MAJORS",
-      rates: { STANDARD: 9.0, PRO: 7.5, RAW: 5.6, ZERO: 6.3 },
+      rates: Object.fromEntries(brokerAccountTypes.map((a) => [a.id, 0])),
     });
     setAddSymbolModalOpen(true);
   };
@@ -365,6 +356,16 @@ export default function IBManagement() {
     { skip: !selectedPartner || !partnerModalOpen }
   );
 
+  const programmeForm = () => {
+    const prog = programmeData?.data;
+    return {
+      evalPeriod: EVAL_MODE_TO_FORM[prog?.evaluationMode ?? "CALENDAR_MONTH"] ?? "monthly",
+      timezone: prog?.timezone || "Asia/Kolkata",
+      evalTime: prog?.evaluationTime || "00:05",
+      activeDefinition: Number(prog?.activeTraderMinLots ?? 1) > 0 ? "lot" : "trade",
+    };
+  };
+
   const handleOpenAddTier = () => {
     const currentCount = tiersData?.data?.length || 0;
     if (currentCount >= 6) {
@@ -381,10 +382,7 @@ export default function IBManagement() {
       status: "ACTIVE",
       qualificationRule: "BOTH",
       benefitsList: ["Priority Support", "Weekly Payouts", "Dedicated Partner Manager"],
-      evalPeriod: "monthly",
-      timezone: "UTC",
-      evalTime: "00:05",
-      activeDefinition: "lot",
+      ...programmeForm(),
       autoUpgrade: true,
       autoDowngrade: true,
       downgradeGrace: "1 cycle",
@@ -409,13 +407,10 @@ export default function IBManagement() {
       status: tier.status,
       qualificationRule: tier.qualificationRule,
       benefitsList: parseBenefits(tier.bonusBenefitsText),
-      evalPeriod: "monthly",
-      timezone: "UTC",
-      evalTime: "00:05",
-      activeDefinition: "lot",
+      ...programmeForm(),
       autoUpgrade: true,
-      autoDowngrade: true,
-      downgradeGrace: "1 cycle",
+      autoDowngrade: tier.autoDowngradeEnabled ?? true,
+      downgradeGrace: graceToForm(tier.downgradeGraceCycles),
       maxDowngradeStep: "one_tier",
       rateStarts: "effective",
       recovery: "clear_flag",
@@ -438,15 +433,28 @@ export default function IBManagement() {
       }
       const body = {
         name: tierForm.name,
-        levelOrder: tierForm.levelOrder,
-        minVolumeLots: tierForm.minVolumeLots,
-        minActiveTraders: tierForm.minActiveTraders,
-        bonusAmount: tierForm.bonusAmount,
+        levelOrder: Number(tierForm.levelOrder),
+        minVolumeLots: Number(tierForm.minVolumeLots),
+        minActiveTraders: Number(tierForm.minActiveTraders),
+        bonusAmount: Number(tierForm.bonusAmount),
         status: tierForm.status,
         qualificationRule: tierForm.qualificationRule,
         bonusBenefitsText: serializeBenefits(tierForm.benefitsList),
         bonusTiming: tierForm.bonusTiming,
+        autoDowngradeEnabled: tierForm.autoDowngrade,
+        downgradeGraceCycles: FORM_TO_GRACE[tierForm.downgradeGrace] ?? 1,
       };
+
+      // Programme-wide evaluation settings, saved only when changed
+      const prog = programmeData?.data;
+      const currentMinLots = Number(prog?.activeTraderMinLots ?? 1);
+      const programmeChanges: Record<string, unknown> = {};
+      const mode = FORM_TO_EVAL_MODE[tierForm.evalPeriod];
+      if (mode && mode !== prog?.evaluationMode) programmeChanges.evaluationMode = mode;
+      if (tierForm.timezone && tierForm.timezone !== prog?.timezone) programmeChanges.timezone = tierForm.timezone;
+      if (tierForm.evalTime && tierForm.evalTime !== prog?.evaluationTime) programmeChanges.evaluationTime = tierForm.evalTime;
+      const minLots = tierForm.activeDefinition === "trade" ? 0 : currentMinLots > 0 ? currentMinLots : 1;
+      if (minLots !== currentMinLots) programmeChanges.activeTraderMinLots = minLots;
 
       if (selectedTier) {
         await updateTier({ tierId: selectedTier.id, body }).unwrap();
@@ -454,6 +462,10 @@ export default function IBManagement() {
       } else {
         await createTier(body).unwrap();
         toast.success("New partner tier created");
+      }
+      if (Object.keys(programmeChanges).length > 0) {
+        await updateProgramme(programmeChanges as any).unwrap();
+        refetchProg();
       }
       setTierModalOpen(false);
       refetchTiers();
@@ -464,6 +476,10 @@ export default function IBManagement() {
 
   const handleOpenManageRates = (tier: IbTier) => {
     setEditingRatesTier(tier);
+    setSymbolRatesRows([]);
+    setAccountEligibility({});
+    setSymbolCategoryFilter("ALL");
+    setSymbolSearchQuery("");
     setEffectiveFrom(new Date().toISOString().slice(0, 16));
     setRatesModalOpen(true);
   };
@@ -471,14 +487,22 @@ export default function IBManagement() {
   const handlePublishRates = async () => {
     if (!editingRatesTier) return;
     try {
-      const accountTypes = Object.entries(accountEligibility).map(([acc, isEligible]) => ({
-        accountTypeId: acc,
-        isEligible,
+      if (brokerAccountTypes.length === 0) {
+        toast.error("No account types found. Create account types in Account Types Management first.");
+        return;
+      }
+
+      const accountTypes = brokerAccountTypes.map((acc) => ({
+        accountTypeId: acc.id,
+        isEligible: accountEligibility[acc.id] ?? true,
       }));
 
+      // Only eligible account types carry rates
       const symbolRates = symbolRatesRows.map((row) => ({
         symbolId: row.symbolId,
-        accountRates: row.rates,
+        accountRates: Object.fromEntries(
+          eligibleAccountTypes.map((acc) => [acc.id, Number(row.rates[acc.id] ?? 0)])
+        ),
       }));
 
       await publishTierRates({
@@ -593,12 +617,14 @@ export default function IBManagement() {
     return matchSearch && matchStatus && matchTier;
   });
 
-  // Summary Metrics
-  const totalPartners = rawPartners.length;
-  const activePartners = rawPartners.filter((p) => !p.isSuspended).length;
-  const mtdVolume = rawPartners.reduce((acc, p) => acc + (p.mtdLots || 0), 0);
-  const pendingPayouts = rawPartners.reduce((acc, p) => acc + (p.pendingPayout || 0), 0);
-  const needsReview = rawPartners.filter((p) => p.isAtRisk || p.payoutHold || p.isSuspended).length;
+  // Summary Metrics: computed by the backend over every IB of the broker
+  const summary = partnersData?.data?.summary;
+  const totalPartners = summary?.totalPartners ?? rawPartners.length;
+  const activePartners = summary?.activePartners ?? rawPartners.filter((p) => !p.isSuspended).length;
+  const mtdVolume = summary?.periodVolumeLots ?? rawPartners.reduce((acc, p) => acc + (p.mtdLots || 0), 0);
+  const pendingPayouts = summary?.pendingPayouts ?? rawPartners.reduce((acc, p) => acc + (p.pendingPayout || 0), 0);
+  const needsReview =
+    summary?.needsReview ?? rawPartners.filter((p) => p.isAtRisk || p.payoutHold || p.isSuspended).length;
 
   return (
     <DashboardLayout title="IB & Tier Administration">
@@ -716,9 +742,8 @@ export default function IBManagement() {
                     </TableHeader>
                     <TableBody>
                       {tiers.map((tier) => {
-                        const assignedIbCount = rawPartners.filter(
-                          (p) => p.currentTier === tier.name || p.currentTierId === tier.id
-                        ).length;
+                        // Counted by the backend over every IB of the broker, not the loaded page
+                        const assignedIbCount = tier.assignedIbCount ?? 0;
 
                         return (
                           <TableRow key={tier.id} className="hover:bg-muted/30 transition-colors">
@@ -747,24 +772,26 @@ export default function IBManagement() {
 
                             <TableCell>
                               <div className="flex flex-wrap gap-1 max-w-[200px]">
-                                <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-semibold bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20">
-                                  Standard
-                                </span>
-                                <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-semibold bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border border-indigo-500/20">
-                                  Pro
-                                </span>
-                                <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-semibold bg-purple-500/10 text-purple-600 dark:text-purple-400 border border-purple-500/20">
-                                  Raw Spread
-                                </span>
-                                <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-semibold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
-                                  Zero
-                                </span>
+                                {(tier.accountTypes || []).filter((a) => a.isEligible).length === 0 ? (
+                                  <span className="text-[11px] text-muted-foreground">None</span>
+                                ) : (
+                                  (tier.accountTypes || [])
+                                    .filter((a) => a.isEligible)
+                                    .map((acc, i) => (
+                                      <span
+                                        key={acc.id}
+                                        className={`inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-semibold border ${ACCOUNT_BADGE_STYLES[i % ACCOUNT_BADGE_STYLES.length]}`}
+                                      >
+                                        {acc.name}
+                                      </span>
+                                    ))
+                                )}
                               </div>
                             </TableCell>
 
                             <TableCell className="text-right">
                               <span className="inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-bold bg-muted/60 text-foreground border border-border/40">
-                                {symbolRatesRows.length} Symbols
+                                {tier.symbolCount ?? 0} Symbols
                               </span>
                             </TableCell>
 
@@ -1482,13 +1509,17 @@ export default function IBManagement() {
             {/* Connected Trading Account Types Selection */}
             <div className="space-y-3">
               <label className="text-xs font-bold text-foreground uppercase tracking-wider">Connected Trading Account Types</label>
+              {isTierRatesFetching ? (
+                <div className="py-4 text-xs text-muted-foreground flex items-center gap-2">
+                  <RefreshCw className="h-3.5 w-3.5 animate-spin text-primary" /> Loading account types...
+                </div>
+              ) : brokerAccountTypes.length === 0 ? (
+                <div className="border border-dashed border-border/60 rounded-xl p-4 text-xs text-muted-foreground">
+                  No account types found. Create account types in Account Types Management first.
+                </div>
+              ) : (
               <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                {[
-                  { id: "STANDARD", name: "Standard Account", accId: "standard_usd" },
-                  { id: "PRO", name: "Pro Account", accId: "pro_usd" },
-                  { id: "RAW", name: "Raw Spread", accId: "raw_usd" },
-                  { id: "ZERO", name: "Zero Account", accId: "zero_usd" },
-                ].map((acc) => {
+                {brokerAccountTypes.map((acc) => {
                   const isChecked = accountEligibility[acc.id] ?? true;
                   return (
                     <label
@@ -1512,7 +1543,8 @@ export default function IBManagement() {
                         />
                       </div>
                       <div className="text-[10px] text-muted-foreground mt-1">
-                        ID: {acc.accId}
+                        ID: {acc.id}
+                        {!acc.isActive && " · Disabled"}
                       </div>
                       <div
                         className={`text-[10px] font-bold mt-1.5 ${
@@ -1525,6 +1557,7 @@ export default function IBManagement() {
                   );
                 })}
               </div>
+              )}
             </div>
 
             {/* Symbol Rates Table */}
@@ -1565,6 +1598,7 @@ export default function IBManagement() {
                     { id: "METALS", label: `Metals (${symbolRatesRows.filter((r) => r.category === "METALS").length})` },
                     { id: "ENERGIES", label: `Gas & Oil (${symbolRatesRows.filter((r) => r.category === "ENERGIES").length})` },
                     { id: "INDICES", label: `Indices (${symbolRatesRows.filter((r) => r.category === "INDICES").length})` },
+                    { id: "CRYPTO", label: `Crypto (${symbolRatesRows.filter((r) => r.category === "CRYPTO").length})` },
                   ] as const
                 ).map((cat) => (
                   <button
@@ -1587,10 +1621,11 @@ export default function IBManagement() {
                     <TableRow>
                       <TableHead className="w-36 text-xs font-bold uppercase tracking-wider">Symbol</TableHead>
                       <TableHead className="w-28 text-xs font-bold uppercase tracking-wider">Group</TableHead>
-                      {accountEligibility["STANDARD"] && <TableHead className="text-right text-xs font-bold uppercase tracking-wider">Standard ($)</TableHead>}
-                      {accountEligibility["PRO"] && <TableHead className="text-right text-xs font-bold uppercase tracking-wider">Pro ($)</TableHead>}
-                      {accountEligibility["RAW"] && <TableHead className="text-right text-xs font-bold uppercase tracking-wider">Raw Spread ($)</TableHead>}
-                      {accountEligibility["ZERO"] && <TableHead className="text-right text-xs font-bold uppercase tracking-wider">Zero ($)</TableHead>}
+                      {eligibleAccountTypes.map((acc) => (
+                        <TableHead key={acc.id} className="text-right text-xs font-bold uppercase tracking-wider">
+                          {acc.name} ($)
+                        </TableHead>
+                      ))}
                       <TableHead className="w-12"></TableHead>
                     </TableRow>
                   </TableHeader>
@@ -1639,30 +1674,29 @@ export default function IBManagement() {
                                 <SelectItem value="METALS">Metals</SelectItem>
                                 <SelectItem value="ENERGIES">Gas & Oil</SelectItem>
                                 <SelectItem value="INDICES">Indices</SelectItem>
+                                <SelectItem value="CRYPTO">Crypto</SelectItem>
                               </SelectContent>
                             </Select>
                           </TableCell>
-                          {["STANDARD", "PRO", "RAW", "ZERO"].map(
-                            (acc) =>
-                              accountEligibility[acc] && (
-                                <TableCell key={acc} className="text-right">
-                                  <Input
-                                    type="number"
-                                    step="0.01"
-                                    value={row.rates[acc] ?? 0}
-                                    onChange={(e) => {
-                                      const realIdx = symbolRatesRows.findIndex((r) => r.symbolId === row.symbolId);
-                                      if (realIdx !== -1) {
-                                        const updated = [...symbolRatesRows];
-                                        updated[realIdx].rates[acc] = Number(e.target.value);
-                                        setSymbolRatesRows(updated);
-                                      }
-                                    }}
-                                    className="w-20 text-right text-xs ml-auto h-8 bg-background border-border/60 font-semibold text-emerald-600 dark:text-emerald-400"
-                                  />
-                                </TableCell>
-                              )
-                          )}
+                          {eligibleAccountTypes.map((acc) => (
+                            <TableCell key={acc.id} className="text-right">
+                              <Input
+                                type="number"
+                                step="0.01"
+                                min="0"
+                                value={row.rates[acc.id] ?? 0}
+                                onChange={(e) => {
+                                  const value = Number(e.target.value);
+                                  setSymbolRatesRows((rows) =>
+                                    rows.map((r) =>
+                                      r.symbolId === row.symbolId ? { ...r, rates: { ...r.rates, [acc.id]: value } } : r
+                                    )
+                                  );
+                                }}
+                                className="w-20 text-right text-xs ml-auto h-8 bg-background border-border/60 font-semibold text-emerald-600 dark:text-emerald-400"
+                              />
+                            </TableCell>
+                          ))}
                           <TableCell>
                             <Button
                               variant="ghost"
@@ -2045,7 +2079,7 @@ export default function IBManagement() {
                                     <div className="text-[11px] text-muted-foreground font-mono">{client.clientId}</div>
                                   </TableCell>
                                   <TableCell className="py-2.5 text-muted-foreground font-medium">
-                                    {client.accountTypes?.[0] || "Standard"}
+                                    {client.accountTypes?.length ? client.accountTypes.join(", ") : "—"}
                                   </TableCell>
                                   <TableCell className="py-2.5">
                                     <Badge variant="outline" className="text-[10px] bg-emerald-500/10 text-emerald-600 border-emerald-500/20 font-semibold">
@@ -2062,53 +2096,11 @@ export default function IBManagement() {
                                 </TableRow>
                               ))
                           ) : (
-                            <>
-                              <TableRow className="text-xs hover:bg-muted/30">
-                                <TableCell className="py-2.5">
-                                  <div className="font-bold text-foreground">Rohan Mehta</div>
-                                  <div className="text-[11px] text-muted-foreground font-mono">CL-28371</div>
-                                </TableCell>
-                                <TableCell className="py-2.5 text-muted-foreground font-medium">Standard</TableCell>
-                                <TableCell className="py-2.5">
-                                  <Badge variant="outline" className="text-[10px] bg-emerald-500/10 text-emerald-600 border-emerald-500/20 font-semibold">
-                                    Verified
-                                  </Badge>
-                                </TableCell>
-                                <TableCell className="py-2.5 text-right font-semibold text-foreground">284.7</TableCell>
-                                <TableCell className="py-2.5 text-right font-bold text-emerald-600">$2,562</TableCell>
-                                <TableCell className="py-2.5 text-muted-foreground">Today</TableCell>
-                              </TableRow>
-                              <TableRow className="text-xs hover:bg-muted/30">
-                                <TableCell className="py-2.5">
-                                  <div className="font-bold text-foreground">Priya Shah</div>
-                                  <div className="text-[11px] text-muted-foreground font-mono">CL-28019</div>
-                                </TableCell>
-                                <TableCell className="py-2.5 text-muted-foreground font-medium">Raw Spread</TableCell>
-                                <TableCell className="py-2.5">
-                                  <Badge variant="outline" className="text-[10px] bg-emerald-500/10 text-emerald-600 border-emerald-500/20 font-semibold">
-                                    Verified
-                                  </Badge>
-                                </TableCell>
-                                <TableCell className="py-2.5 text-right font-semibold text-foreground">192.1</TableCell>
-                                <TableCell className="py-2.5 text-right font-bold text-emerald-600">$1,076</TableCell>
-                                <TableCell className="py-2.5 text-muted-foreground">Today</TableCell>
-                              </TableRow>
-                              <TableRow className="text-xs hover:bg-muted/30">
-                                <TableCell className="py-2.5">
-                                  <div className="font-bold text-foreground">Kunal Joshi</div>
-                                  <div className="text-[11px] text-muted-foreground font-mono">CL-27744</div>
-                                </TableCell>
-                                <TableCell className="py-2.5 text-muted-foreground font-medium">Pro</TableCell>
-                                <TableCell className="py-2.5">
-                                  <Badge variant="outline" className="text-[10px] bg-amber-500/10 text-amber-600 border-amber-500/20 font-semibold">
-                                    Review
-                                  </Badge>
-                                </TableCell>
-                                <TableCell className="py-2.5 text-right font-semibold text-foreground">96.4</TableCell>
-                                <TableCell className="py-2.5 text-right font-bold text-emerald-600">$723</TableCell>
-                                <TableCell className="py-2.5 text-muted-foreground">Yesterday</TableCell>
-                              </TableRow>
-                            </>
+                            <TableRow>
+                              <TableCell colSpan={6} className="py-6 text-center text-xs text-muted-foreground">
+                                No referred clients yet
+                              </TableCell>
+                            </TableRow>
                           )}
                         </TableBody>
                       </Table>
@@ -2211,74 +2203,39 @@ export default function IBManagement() {
                   <SelectItem value="METALS">Precious Metals</SelectItem>
                   <SelectItem value="ENERGIES">Gas & Oil (Energies)</SelectItem>
                   <SelectItem value="INDICES">Equity Indices</SelectItem>
+                  <SelectItem value="CRYPTO">Crypto</SelectItem>
                 </SelectContent>
               </Select>
             </div>
 
             <div className="space-y-2 pt-1 border-t border-border/40">
               <label className="text-xs font-bold text-foreground uppercase tracking-wider">Commission Rates ($ / Closed Lot)</label>
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1">
-                  <label className="text-[11px] font-semibold text-muted-foreground">Standard ($)</label>
-                  <Input
-                    type="number"
-                    step="0.01"
-                    value={newSymbolForm.rates.STANDARD}
-                    onChange={(e) =>
-                      setNewSymbolForm({
-                        ...newSymbolForm,
-                        rates: { ...newSymbolForm.rates, STANDARD: Number(e.target.value) },
-                      })
-                    }
-                    className="text-xs h-8 text-right bg-background border-border/60 font-semibold"
-                  />
+              {eligibleAccountTypes.length === 0 ? (
+                <p className="text-[11px] text-muted-foreground">
+                  No eligible account types. Add account types in Account Types Management.
+                </p>
+              ) : (
+                <div className="grid grid-cols-2 gap-3">
+                  {eligibleAccountTypes.map((acc) => (
+                    <div key={acc.id} className="space-y-1">
+                      <label className="text-[11px] font-semibold text-muted-foreground">{acc.name} ($)</label>
+                      <Input
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        value={newSymbolForm.rates[acc.id] ?? 0}
+                        onChange={(e) =>
+                          setNewSymbolForm({
+                            ...newSymbolForm,
+                            rates: { ...newSymbolForm.rates, [acc.id]: Number(e.target.value) },
+                          })
+                        }
+                        className="text-xs h-8 text-right bg-background border-border/60 font-semibold"
+                      />
+                    </div>
+                  ))}
                 </div>
-                <div className="space-y-1">
-                  <label className="text-[11px] font-semibold text-muted-foreground">Pro ($)</label>
-                  <Input
-                    type="number"
-                    step="0.01"
-                    value={newSymbolForm.rates.PRO}
-                    onChange={(e) =>
-                      setNewSymbolForm({
-                        ...newSymbolForm,
-                        rates: { ...newSymbolForm.rates, PRO: Number(e.target.value) },
-                      })
-                    }
-                    className="text-xs h-8 text-right bg-background border-border/60 font-semibold"
-                  />
-                </div>
-                <div className="space-y-1">
-                  <label className="text-[11px] font-semibold text-muted-foreground">Raw Spread ($)</label>
-                  <Input
-                    type="number"
-                    step="0.01"
-                    value={newSymbolForm.rates.RAW}
-                    onChange={(e) =>
-                      setNewSymbolForm({
-                        ...newSymbolForm,
-                        rates: { ...newSymbolForm.rates, RAW: Number(e.target.value) },
-                      })
-                    }
-                    className="text-xs h-8 text-right bg-background border-border/60 font-semibold"
-                  />
-                </div>
-                <div className="space-y-1">
-                  <label className="text-[11px] font-semibold text-muted-foreground">Zero ($)</label>
-                  <Input
-                    type="number"
-                    step="0.01"
-                    value={newSymbolForm.rates.ZERO}
-                    onChange={(e) =>
-                      setNewSymbolForm({
-                        ...newSymbolForm,
-                        rates: { ...newSymbolForm.rates, ZERO: Number(e.target.value) },
-                      })
-                    }
-                    className="text-xs h-8 text-right bg-background border-border/60 font-semibold"
-                  />
-                </div>
-              </div>
+              )}
             </div>
           </div>
 

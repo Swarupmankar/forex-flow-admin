@@ -28,6 +28,27 @@ export interface IbTier {
   autoDowngradeEnabled: boolean;
   downgradeGraceCycles: number;
   versions?: any[];
+  /** The broker's account types (Account Types Management) with this tier's eligibility */
+  accountTypes?: IbAccountTypeOption[];
+  symbolCount?: number;
+  /** IBs holding this tier now */
+  assignedIbCount?: number;
+}
+
+export interface IbAccountTypeOption {
+  /** AccountTypes id as a string; IB rates are keyed by it */
+  id: string;
+  name: string;
+  isActive: boolean;
+  isEligible: boolean;
+}
+
+export interface IbTierRatesResponse {
+  tier: IbTier;
+  accountTypes: IbAccountTypeOption[];
+  /** Symbols from the broker's spread profiles */
+  symbols: string[];
+  activeVersion: any;
 }
 
 export interface IbPartnerItem {
@@ -49,6 +70,25 @@ export interface IbPartnerItem {
   pendingPayout: number;
   joinedAt: string;
 }
+
+/** Header cards on IB management, over every IB of the broker */
+export interface IbPartnersSummary {
+  totalPartners: number;
+  activePartners: number;
+  needsReview: number;
+  /** closed REAL lots in the running evaluation period */
+  periodVolumeLots: number;
+  pendingPayouts: number;
+}
+
+export interface IbPartnersPage {
+  partners: IbPartnerItem[];
+  pagination: { page: number; limit: number; total: number; totalPages: number };
+  summary?: IbPartnersSummary;
+}
+
+/** The backend serves at most this many partners per request. */
+const PARTNERS_PAGE_SIZE = 100;
 
 export interface RatePublishRequest {
   effectiveFrom: string;
@@ -110,11 +150,13 @@ export const ibAdminApi = baseApi.injectEndpoints({
       invalidatesTags: ["IbAdmin"],
     }),
 
-    getTierRates: build.query<{ success: boolean; data: { tier: IbTier; activeVersion: any } }, number>({
+    getTierRates: build.query<{ success: boolean; data: IbTierRatesResponse }, number>({
       query: (tierId) => ({
         url: ENDPOINTS.IB_ADMIN.TIER_RATES(tierId),
         method: "GET",
       }),
+      // Prefetched for every tier; keep them while the admin works on the page
+      keepUnusedDataFor: 600,
       providesTags: ["IbAdmin"],
     }),
 
@@ -127,8 +169,44 @@ export const ibAdminApi = baseApi.injectEndpoints({
       invalidatesTags: ["IbAdmin"],
     }),
 
+    /**
+     * Every IB of the broker: fetches page after page, so the list is not cut
+     * off at one page however many IBs there are.
+     */
+    getAllPartners: build.query<{ success: boolean; data: IbPartnersPage }, void>({
+      async queryFn(_arg, _api, _extraOptions, baseQuery) {
+        const partners: IbPartnerItem[] = [];
+        let summary: IbPartnersSummary | undefined;
+        let total = 0;
+        for (let page = 1; ; page++) {
+          const res = await baseQuery({
+            url: ENDPOINTS.IB_ADMIN.PARTNERS,
+            method: "GET",
+            params: { page, limit: PARTNERS_PAGE_SIZE },
+          });
+          if (res.error) return { error: res.error };
+          const data = (res.data as { data: IbPartnersPage }).data;
+          partners.push(...data.partners);
+          summary = summary ?? data.summary;
+          total = data.pagination.total;
+          if (page >= data.pagination.totalPages || data.partners.length === 0) break;
+        }
+        return {
+          data: {
+            success: true,
+            data: {
+              partners,
+              pagination: { page: 1, limit: partners.length, total, totalPages: 1 },
+              summary,
+            },
+          },
+        };
+      },
+      providesTags: ["IbAdmin"],
+    }),
+
     getPartners: build.query<
-      { success: boolean; data: { partners: IbPartnerItem[]; pagination: any } },
+      { success: boolean; data: IbPartnersPage },
       { search?: string; status?: string; page?: number; limit?: number }
     >({
       query: (params) => ({
@@ -212,6 +290,7 @@ export const {
   useGetTierRatesQuery,
   usePublishTierRatesMutation,
   useGetPartnersQuery,
+  useGetAllPartnersQuery,
   useGetPartnerByIdQuery,
   useManualTierOverrideMutation,
   useAssignManagerMutation,
