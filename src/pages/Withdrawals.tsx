@@ -11,8 +11,6 @@ import {
   useGetTransactionsQuery,
   useApproveTransactionMutation,
   useRejectTransactionMutation,
-  useGetCommissionWithdrawalsQuery,
-  useUpdateCommissionRequestMutation,
 } from "@/API/transactions.api";
 
 export interface WithdrawalRequest {
@@ -145,31 +143,13 @@ export default function Withdrawals() {
     getAllPending: true,
   });
 
-  // Fetch commission withdraw requests (all statuses). We'll only use PENDING here.
-  const { data: commissionAllData = [], isLoading: isLoadingCommissions } =
-    useGetCommissionWithdrawalsQuery();
-
-  // Commission update mutation (approve/reject referral)
-  const [updateCommissionRequest, { isLoading: isUpdatingCommission }] =
-    useUpdateCommissionRequestMutation();
-
   // Approve / reject mutations for normal transactions
   const [approveMutation, { isLoading: isApproving }] =
     useApproveTransactionMutation();
   const [rejectMutation, { isLoading: isRejecting }] =
     useRejectTransactionMutation();
 
-  // ----- Only keep commission entries that are PENDING (exclude PAID & REJECTED) -----
-  const commissionPending: ApiTransaction[] = useMemo(() => {
-    if (!commissionAllData || !Array.isArray(commissionAllData)) return [];
-    return (commissionAllData as ApiTransaction[]).filter(
-      (c) =>
-        (c.transactionStatus ?? c.status ?? "").toString().toUpperCase() ===
-        "PENDING"
-    );
-  }, [commissionAllData]);
-
-  // normalize fetched -> ApiTransaction[] and merge commissionPending
+  // normalize fetched -> ApiTransaction[]
   const apiTxs: ApiTransaction[] = useMemo(() => {
     // normalize existing fetched (supports either array or { transactions: [] } shape)
     const txsFromFetched: ApiTransaction[] = (() => {
@@ -181,13 +161,8 @@ export default function Withdrawals() {
       return (asAny as ApiTransaction[]) || [];
     })();
 
-    // commissionPending is already Transaction[] shaped by the API transform
-    const txsFromCommission: ApiTransaction[] = commissionPending
-      ? (commissionPending as ApiTransaction[])
-      : [];
-
-    // combine and dedupe by id (preserve order: fetched then commissions)
-    const combined = [...txsFromFetched, ...txsFromCommission];
+    // dedupe by id
+    const combined = [...txsFromFetched];
     const seen = new Set<number>();
     const deduped: ApiTransaction[] = [];
     for (const t of combined) {
@@ -203,7 +178,7 @@ export default function Withdrawals() {
       }
     }
     return deduped;
-  }, [fetched, commissionPending]);
+  }, [fetched]);
 
   // keep only withdraw transactions & map to UI shape
   const withdrawals = useMemo(() => {
@@ -247,58 +222,20 @@ export default function Withdrawals() {
     });
   }, [withdrawals, searchTerm, activeFilter, dateRange]);
 
-  /**
-   * Approve a single id. Detect commission rows by checking commissionPending presence.
-   * If referral/commission -> call updateCommissionRequest. Else call approveMutation.
-   */
+  /** Approve a single id. */
   async function approveById(id: string) {
     try {
-      // find transaction in the normalized list (apiTxs)
-      const tx = apiTxs.find((t) => String(t.id) === String(id));
-
-      // RELIABLE commission detection: does this id appear in commissionPending fetched from commission route?
-      const isCommission = commissionPending.some(
-        (c) => String(c.id) === String(id)
-      );
-
-      if (isCommission) {
-        // commission API requires userId and commissionWithdrawRequestId
-        const commEntry = commissionPending.find(
-          (c) => String(c.id) === String(id)
-        );
-        const userId =
-          (tx && (tx.userId ?? (tx as any).userId)) ??
-          (commEntry && (commEntry.userId ?? (commEntry as any).user?.id)) ??
-          undefined;
-
-        if (userId == null) {
-          throw new Error("Commission transaction missing userId");
-        }
-
-        const payload = {
-          userId: Number(userId),
-          commissionWithdrawRequestId: Number(id),
-          action: "PAID" as const,
-        };
-        const res = await updateCommissionRequest(payload).unwrap();
-        return res;
-      } else {
-        // normal transaction flow (existing)
         const res = await (approveMutation as any)({
           transactionId: Number(id),
         }).unwrap();
         return res;
-      }
     } catch (err) {
       console.error("approveById failed:", err);
       throw err;
     }
   }
 
-  /**
-   * Reject a single id. For commission rows call updateCommissionRequest with action REJECTED and rejectionMessage.
-   * For normal transactions call existing rejectMutation.
-   */
+  /** Reject a single id. */
   async function rejectById(id: string, reason?: string) {
     try {
       const trimmed = (reason ?? "").toString().trim();
@@ -312,36 +249,6 @@ export default function Withdrawals() {
         throw new Error("rejectionReason is required (client-side)");
       }
 
-      // detect commission by commissionPending presence
-      const isCommission = commissionPending.some(
-        (c) => String(c.id) === String(id)
-      );
-
-      if (isCommission) {
-        const commEntry = commissionPending.find(
-          (c) => String(c.id) === String(id)
-        );
-        const userId =
-          (commEntry && (commEntry.userId ?? (commEntry as any).user?.id)) ??
-          undefined;
-        if (userId == null) {
-          // fallback: try to find in merged apiTxs
-          const tx = apiTxs.find((t) => String(t.id) === String(id));
-          if (!tx || (tx.userId ?? (tx as any).userId) == null) {
-            throw new Error("Commission transaction missing userId");
-          }
-        }
-
-        const payload = {
-          userId: Number(userId),
-          commissionWithdrawRequestId: Number(id),
-          action: "REJECTED" as const,
-          rejectionMessage: trimmed,
-        };
-        const res = await updateCommissionRequest(payload).unwrap();
-        return res;
-      } else {
-        // Normal transaction rejection uses existing endpoint
         const payload = { transactionId: Number(id), rejectionReason: trimmed };
         console.log("Calling rejectMutation with payload ->", payload);
 
@@ -353,7 +260,6 @@ export default function Withdrawals() {
           transactionId?: number;
           status?: string;
         };
-      }
     } catch (err: any) {
       console.error(
         "Reject mutation failed:",

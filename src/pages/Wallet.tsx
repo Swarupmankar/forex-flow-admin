@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { WalletHeader } from "@/components/wallet/WalletHeader";
 import { FinancialSummaryCards } from "@/components/wallet/FinancialSummaryCards";
+import { CryptoRailsCard } from "@/components/wallet/CryptoRailsCard";
 import { WalletBalanceSection } from "@/components/wallet/WalletBalanceSection";
 import { TransactionFilters } from "@/components/wallet/TransactionFilters";
 import { TransactionHistoryTable } from "@/components/wallet/TransactionHistoryTable";
@@ -248,6 +249,10 @@ export default function Wallet() {
           </div>
         )}
         {financialSummary && <FinancialSummaryCards data={financialSummary} />}
+
+        {/* Sits under the fiat summary deliberately: the crypto rails run their
+            own P&L, and the wallet balance above reads as short by design. */}
+        <CryptoRailsCard />
 
         {/* Wallet balances */}
         {isWalletLoading && (

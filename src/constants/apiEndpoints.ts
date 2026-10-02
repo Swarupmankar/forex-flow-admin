@@ -50,8 +50,6 @@ export const ENDPOINTS = {
   TRANSACTIONS: {
     ALL_TRANSACTIONS: "/broker/user-management/get-transactions",
     UPDATE_TRANSACTION: "/broker/user-management/update-transactions",
-    COMMISSION_WITHDRAWAL_REQUESTS: "/broker/transaction/commission-requests",
-    UPDATE_COMMISSION_REQUEST: "/broker/transaction/update-commission-request",
   },
 
   ADMIN_WALLET: {
@@ -60,6 +58,9 @@ export const ENDPOINTS = {
     WITHDRAW_BALANCES: "/broker/admin-wallet/withdraw-balances",
     WITHDRAW_HISTORY: "/broker/admin-wallet/withdraw-history",
     REPLENISH_BALANCES: "/broker/admin-wallet/replenish-balances",
+    // CoinsBuy rails: what they earned and cost, and the flat fee that funds them.
+    CRYPTO_PROFIT: "/broker/admin-wallet/crypto-profit",
+    CRYPTO_WITHDRAW_FEE: "/broker/admin-wallet/crypto-withdraw-fee",
   },
 
   // The broker's bank / UPI receiving details, shown to clients on the
