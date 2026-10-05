@@ -95,7 +95,6 @@ export default function Wallet() {
         totalWithdrawals: accountingData.totalWithdrawals,
         netProfit: accountingData.netProfit,
         brokerFeesEarned: accountingData.brokerFeesEarned,
-        spreadEarning: accountingData.spreadEarning,
         lossesSaved: accountingData.lossesSaved,
       }
     : null;

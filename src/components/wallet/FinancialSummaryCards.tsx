@@ -6,7 +6,6 @@ import {
   PiggyBank,
   TrendingUpIcon,
   Receipt,
-  Target,
   Shield,
 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
@@ -17,7 +16,6 @@ interface FinancialSummaryCardsProps {
     totalWithdrawals: number;
     netProfit: number;
     brokerFeesEarned: number;
-    spreadEarning: number;
     lossesSaved: number;
   };
 }
@@ -64,14 +62,6 @@ export function FinancialSummaryCards({ data }: FinancialSummaryCardsProps) {
       icon: Receipt,
       bgColor: "bg-orange-50",
       iconColor: "text-orange-600",
-    },
-    {
-      title: "Spread Earning",
-      amount: data.spreadEarning,
-      change: 0,
-      icon: Target,
-      bgColor: "bg-indigo-50",
-      iconColor: "text-indigo-600",
     },
     {
       title: "Losses Saved",

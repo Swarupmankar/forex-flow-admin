@@ -103,22 +103,15 @@ export function AccountTypeCard({
               </div>
             </div>
             <div>
+              <div className="text-muted-foreground">Leverage</div>
+              <div className="font-semibold text-foreground">
+                1:{accountType.leverage}
+              </div>
+            </div>
+            <div>
               <div className="text-muted-foreground">Commission</div>
               <div className="font-semibold text-foreground">
                 {accountType.commission}
-              </div>
-            </div>
-            <div>
-              <div className="text-muted-foreground">Spreads</div>
-              <div className="font-semibold text-foreground text-xs">
-                {accountType.spread}
-              </div>
-            </div>
-            <div>
-              <div className="text-muted-foreground">Spread Profile</div>
-              <div className="font-semibold text-foreground text-xs">
-                {accountType.spreadProfileName ||
-                  `Profile #${accountType.spreadProfileId}`}
               </div>
             </div>
           </div>

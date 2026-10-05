@@ -7,8 +7,7 @@ export interface BrokerPlan {
   name: string;
   minDeposit: number;
   description: string;
-  spread: number;
-  spreadProfileId: number;
+  leverage: number;
   commission: number;
   isActive: boolean;
   createdAt: string;
@@ -21,10 +20,8 @@ export interface AccountType {
   name: string;
   description: string;
   minDeposit: number;
+  leverage: number;
   commission: number;
-  spread: number;
-  spreadProfileId: number;
-  spreadProfileName?: string;
   isActive: boolean;
   createdAt: string;
 }
@@ -34,8 +31,7 @@ export interface CreatePlanRequest {
   name: string;
   minDeposit: number;
   description: string;
-  spread: number;
-  spreadProfileId: number;
+  leverage: number;
   commission: number;
 }
 

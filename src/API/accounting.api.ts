@@ -39,7 +39,6 @@ export const accountingApi = baseApi.injectEndpoints({
           totalDeposits: toNumber(res.totalDeposits),
           totalWithdrawals: toNumber(res.totalWithdrawals),
           netProfit: toNumber(res.netProfit),
-          spreadEarning: toNumber(res.spreadEarning),
           lossesSaved: toNumber(res.lossesSaved),
           brokerFeesEarned: toNumber(res.brokerFeesEarned),
         };

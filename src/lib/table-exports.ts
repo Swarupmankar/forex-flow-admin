@@ -109,40 +109,13 @@ export function exportTransactions(transactions: any[], format: "csv" | "pdf") {
   }
 }
 
-// Spread Profiles Export
-export function exportSpreadProfiles(profiles: any[], format: "csv" | "pdf") {
-  const headers = ["Profile Name", "Type", "Status", "Currency Pairs", "Avg Buy Spread", "Avg Sell Spread", "Last Updated"];
-  const rows = profiles.map(profile => [
-    profile.name,
-    profile.type.charAt(0).toUpperCase() + profile.type.slice(1),
-    formatStatusForExport(profile.status),
-    profile.currencyPairs.length.toString(),
-    profile.averageSpread.buy + " pips",
-    profile.averageSpread.sell + " pips",
-    formatDateForExport(profile.updatedAt)
-  ]);
-
-  const exportData = {
-    headers,
-    rows,
-    filename: generateExportFilename("spread_profiles")
-  };
-
-  if (format === "csv") {
-    exportToCSV(exportData);
-  } else {
-    exportToPDF(exportData);
-  }
-}
-
 // Account Types Export
 export function exportAccountTypes(accountTypes: any[], format: "csv" | "pdf") {
-  const headers = ["Account Type", "Minimum Deposit", "Maximum Leverage", "Spread Type", "Commission", "Status"];
+  const headers = ["Account Type", "Minimum Deposit", "Leverage", "Commission", "Status"];
   const rows = accountTypes.map(accountType => [
     accountType.name,
     formatCurrencyForExport(accountType.minimumDeposit),
-    accountType.maxLeverage + ":1",
-    accountType.spreadType,
+    "1:" + accountType.leverage,
     accountType.commission + "%",
     formatStatusForExport(accountType.status)
   ]);

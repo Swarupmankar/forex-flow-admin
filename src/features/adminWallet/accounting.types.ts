@@ -3,7 +3,6 @@ export type AccountingResponseRaw = {
   totalDeposits: string;
   totalWithdrawals: string;
   netProfit: string;
-  spreadEarning: string;
   lossesSaved: string;
   brokerFeesEarned: string;
 };
@@ -13,7 +12,6 @@ export type AccountingDetails = {
   totalDeposits: number;
   totalWithdrawals: number;
   netProfit: number;
-  spreadEarning: number;
   lossesSaved: number;
   brokerFeesEarned: number;
 };

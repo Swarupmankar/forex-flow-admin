@@ -46,7 +46,7 @@ export interface IbAccountTypeOption {
 export interface IbTierRatesResponse {
   tier: IbTier;
   accountTypes: IbAccountTypeOption[];
-  /** Symbols from the broker's spread profiles */
+  /** Symbols from the instrument list */
   symbols: string[];
   activeVersion: any;
 }

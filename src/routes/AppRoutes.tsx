@@ -7,7 +7,6 @@ import ClientProfile from "@/pages/ClientProfile";
 import DepositRequests from "@/pages/DepositRequests";
 import Transactions from "@/pages/DepositHistory";
 import Withdrawals from "@/pages/Withdrawals";
-import SpreadProfiles from "@/pages/SpreadProfiles";
 import AccountTypes from "@/pages/AccountTypes";
 import Notifications from "@/pages/Notifications";
 import Support from "@/pages/Support";
@@ -35,7 +34,6 @@ const AppRoutes = () => {
         <Route path="/deposits" element={<DepositRequests />} />
         <Route path="/deposit-history" element={<Transactions />} />
         <Route path="/withdrawals" element={<Withdrawals />} />
-        <Route path="/accounts" element={<SpreadProfiles />} />
         <Route path="/account-types" element={<AccountTypes />} />
         <Route path="/ib-management" element={<IBManagement />} />
         <Route path="/notifications" element={<Notifications />} />

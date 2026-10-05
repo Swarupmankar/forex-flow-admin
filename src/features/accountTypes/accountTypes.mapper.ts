@@ -7,10 +7,8 @@ export function mapBrokerPlanToAccountType(plan: BrokerPlan): AccountType {
     name: plan.name,
     description: plan.description,
     minDeposit: plan.minDeposit,
+    leverage: plan.leverage,
     commission: plan.commission,
-    spread: plan.spread,
-    spreadProfileId: plan.spreadProfileId,
-    spreadProfileName: (plan as any).spreadProfileName ?? undefined,
     isActive: plan.isActive,
     createdAt: plan.createdAt,
   };
