@@ -11,6 +11,8 @@ export function mapBrokerPlanToAccountType(plan: BrokerPlan): AccountType {
     spread: plan.spread,
     spreadProfileId: plan.spreadProfileId,
     spreadProfileName: (plan as any).spreadProfileName ?? undefined,
+    leverage: plan.leverage,
+    takerFeed: plan.takerFeed,
     isActive: plan.isActive,
     createdAt: plan.createdAt,
   };

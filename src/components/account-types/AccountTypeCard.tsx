@@ -121,6 +121,18 @@ export function AccountTypeCard({
                   `Profile #${accountType.spreadProfileId}`}
               </div>
             </div>
+            <div>
+              <div className="text-muted-foreground">Leverage</div>
+              <div className="font-semibold text-foreground">
+                1:{accountType.leverage}
+              </div>
+            </div>
+            <div>
+              <div className="text-muted-foreground">Taker Feed</div>
+              <div className="font-semibold text-foreground font-mono text-xs">
+                {accountType.takerFeed}
+              </div>
+            </div>
           </div>
 
           <div className="flex items-center justify-between pt-2 border-t border-border">

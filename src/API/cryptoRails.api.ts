@@ -57,6 +57,23 @@ export const cryptoRailsApi = baseApi.injectEndpoints({
       // is stale the moment this succeeds.
       invalidatesTags: ["CryptoRails"],
     }),
+
+    getIbMinWithdraw: build.query<{ ibMinWithdraw: number }, void>({
+      query: () => ({
+        url: ENDPOINTS.ADMIN_WALLET.IB_MIN_WITHDRAW,
+        method: "GET",
+      }),
+      providesTags: ["CryptoRails"],
+    }),
+
+    setIbMinWithdraw: build.mutation<{ ibMinWithdraw: number }, number>({
+      query: (ibMinWithdraw) => ({
+        url: ENDPOINTS.ADMIN_WALLET.IB_MIN_WITHDRAW,
+        method: "PUT",
+        data: { ibMinWithdraw },
+      }),
+      invalidatesTags: ["CryptoRails"],
+    }),
   }),
 });
 
@@ -64,4 +81,6 @@ export const {
   useGetCryptoProfitQuery,
   useGetCryptoWithdrawFeeQuery,
   useSetCryptoWithdrawFeeMutation,
+  useGetIbMinWithdrawQuery,
+  useSetIbMinWithdrawMutation,
 } = cryptoRailsApi;

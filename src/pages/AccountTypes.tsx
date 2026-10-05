@@ -116,6 +116,7 @@ export default function AccountTypes() {
             spread: accountTypeData.spread,
             spreadProfileId: accountTypeData.spreadProfileId,
             commission: accountTypeData.commission,
+            leverage: accountTypeData.leverage,
           },
         }).unwrap();
 
@@ -137,6 +138,8 @@ export default function AccountTypes() {
           spread: accountTypeData.spread,
           spreadProfileId: accountTypeData.spreadProfileId, // from dropdown
           commission: accountTypeData.commission,
+          leverage: accountTypeData.leverage,
+          takerFeed: accountTypeData.takerFeed,
         }).unwrap();
 
         const newPlan = mapBrokerPlanToAccountType(res.template);

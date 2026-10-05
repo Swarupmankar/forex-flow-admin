@@ -10,6 +10,8 @@ import {
   useGetCryptoProfitQuery,
   useGetCryptoWithdrawFeeQuery,
   useSetCryptoWithdrawFeeMutation,
+  useGetIbMinWithdrawQuery,
+  useSetIbMinWithdrawMutation,
 } from "@/API/cryptoRails.api";
 
 const usd = (n: number) =>
@@ -35,12 +37,33 @@ export const CryptoRailsCard: React.FC = () => {
   const { data: feeData } = useGetCryptoWithdrawFeeQuery();
   const [saveFee, { isLoading: isSaving }] = useSetCryptoWithdrawFeeMutation();
 
+  const { data: minData } = useGetIbMinWithdrawQuery();
+  const [saveMin, { isLoading: isSavingMin }] = useSetIbMinWithdrawMutation();
+
   const [fee, setFee] = useState("");
+  const [ibMin, setIbMin] = useState("");
 
   // Only seeds the input; typing must not be overwritten by a refetch.
   useEffect(() => {
     if (feeData) setFee(String(feeData.cryptoWithdrawFee));
   }, [feeData]);
+  useEffect(() => {
+    if (minData) setIbMin(String(minData.ibMinWithdraw));
+  }, [minData]);
+
+  const onSaveMin = async () => {
+    const value = Number(ibMin);
+    if (!Number.isFinite(value) || value < 0) {
+      toast.error("Minimum must be zero or more");
+      return;
+    }
+    try {
+      await saveMin(value).unwrap();
+      toast.success("IB minimum withdrawal updated");
+    } catch {
+      toast.error("Could not update the IB minimum withdrawal");
+    }
+  };
 
   const onSave = async () => {
     const value = Number(fee);
@@ -142,6 +165,28 @@ export const CryptoRailsCard: React.FC = () => {
             A flat amount, taken from every crypto withdrawal before the payout is
             created. It has to cover the deposit commission above, so check Net
             after changing it.
+          </p>
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="ibMinWithdraw">IB wallet minimum withdrawal (USD)</Label>
+          <div className="flex gap-2">
+            <Input
+              id="ibMinWithdraw"
+              type="number"
+              min="0"
+              step="0.01"
+              value={ibMin}
+              onChange={(e) => setIbMin(e.target.value)}
+              className="max-w-40"
+            />
+            <Button onClick={onSaveMin} disabled={isSavingMin}>
+              {isSavingMin ? "Saving..." : "Save"}
+            </Button>
+          </div>
+          <p className="text-sm text-muted-foreground">
+            The smallest amount an IB can withdraw from their commission wallet.
+            Applies to the IB wallet only; the crypto wallet has no minimum.
           </p>
         </div>
       </CardContent>

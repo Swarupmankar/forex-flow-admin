@@ -51,6 +51,8 @@ export function AccountTypeModal({
     commission: 0,
     spread: 0,
     spreadProfileId: 1,
+    leverage: 100,
+    takerFeed: "",
     isActive: true,
   });
 
@@ -65,6 +67,8 @@ export function AccountTypeModal({
         commission: accountType.commission,
         spread: accountType.spread,
         spreadProfileId: accountType.spreadProfileId,
+        leverage: accountType.leverage,
+        takerFeed: accountType.takerFeed,
         isActive: accountType.isActive,
       });
     } else {
@@ -75,6 +79,8 @@ export function AccountTypeModal({
         commission: 0,
         spread: 0,
         spreadProfileId: 1,
+        leverage: 100,
+        takerFeed: "",
         isActive: true,
       });
     }
@@ -102,6 +108,21 @@ export function AccountTypeModal({
 
     if (formData.spread < 0) {
       newErrors.spread = "Spread must be a positive number";
+    }
+
+    if (!Number.isInteger(formData.leverage) || formData.leverage < 1) {
+      newErrors.leverage = "Leverage must be a whole number of at least 1";
+    }
+
+    // Only on create: the feed cannot be changed afterwards. Same rule as the
+    // backend, which also checks the feed exists on the price gateway.
+    if (!accountType) {
+      if (!formData.takerFeed) {
+        newErrors.takerFeed = "Taker feed is required";
+      } else if (!/^[A-Za-z0-9_-]+$/.test(formData.takerFeed)) {
+        newErrors.takerFeed =
+          'Use letters, digits, "_" and "-" only, with no spaces';
+      }
     }
 
     setErrors(newErrors);
@@ -276,6 +297,48 @@ export function AccountTypeModal({
                 />
                 {errors.spread && (
                   <p className="text-sm text-destructive">{errors.spread}</p>
+                )}
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="leverage">Leverage (1:X) *</Label>
+                <Input
+                  id="leverage"
+                  type="number"
+                  min="1"
+                  step="1"
+                  value={formData.leverage}
+                  onChange={(e) =>
+                    handleInputChange("leverage", parseInt(e.target.value) || 0)
+                  }
+                  placeholder="e.g., 100"
+                  className={errors.leverage ? "border-destructive" : ""}
+                />
+                {errors.leverage && (
+                  <p className="text-sm text-destructive">{errors.leverage}</p>
+                )}
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="takerFeed">Taker Feed *</Label>
+                <Input
+                  id="takerFeed"
+                  value={formData.takerFeed}
+                  onChange={(e) =>
+                    handleInputChange("takerFeed", e.target.value.trim())
+                  }
+                  placeholder="e.g., PLAIN, STD, VIP"
+                  disabled={!!accountType}
+                  className={errors.takerFeed ? "border-destructive" : ""}
+                />
+                {errors.takerFeed ? (
+                  <p className="text-sm text-destructive">{errors.takerFeed}</p>
+                ) : (
+                  <p className="text-xs text-muted-foreground">
+                    {accountType
+                      ? "Fixed when the account type was created. To use another feed, create a new account type."
+                      : "Must match a feed on the price gateway. It is saved as this type's key in the trading account token and cannot be changed later."}
+                  </p>
                 )}
               </div>
             </div>

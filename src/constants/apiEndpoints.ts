@@ -61,6 +61,7 @@ export const ENDPOINTS = {
     // CoinsBuy rails: what they earned and cost, and the flat fee that funds them.
     CRYPTO_PROFIT: "/broker/admin-wallet/crypto-profit",
     CRYPTO_WITHDRAW_FEE: "/broker/admin-wallet/crypto-withdraw-fee",
+    IB_MIN_WITHDRAW: "/broker/admin-wallet/ib-min-withdraw",
   },
 
   // The broker's bank / UPI receiving details, shown to clients on the

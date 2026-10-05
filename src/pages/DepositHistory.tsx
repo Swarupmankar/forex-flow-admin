@@ -5,10 +5,7 @@ import { TransactionsTable } from "@/components/transactions/TransactionsTable";
 import type { DateRange } from "react-day-picker";
 
 import type { Transaction as ApiTransaction } from "@/features/transactions/transactions.types";
-import {
-  useGetTransactionsQuery,
-  useGetCommissionWithdrawalsQuery,
-} from "@/API/transactions.api";
+import { useGetTransactionsQuery } from "@/API/transactions.api";
 
 export interface TransactionRecord {
   id: string;
@@ -47,20 +44,6 @@ export default function Transactions() {
     getAllPending: false,
   });
 
-  // fetch commission (now returns ALL commission entries because of Option A)
-  const {
-    data: commissionFetched,
-    isLoading: isLoadingCommissions,
-    isError: isErrorCommissions,
-  } = useGetCommissionWithdrawalsQuery();
-
-  // small logs so you can verify commission payload arrives
-  useEffect(() => {
-    if (commissionFetched) {
-      console.log("Commission entries (from API) ->", commissionFetched);
-    }
-  }, [commissionFetched]);
-
   // normalize fetched data -> ApiTransaction[]
   const apiTransactions: ApiTransaction[] = useMemo(() => {
     if (!fetched) return [];
@@ -70,18 +53,6 @@ export default function Transactions() {
       return asAny.transactions as ApiTransaction[];
     return (asAny as ApiTransaction[]) || [];
   }, [fetched]);
-
-  // commissionFetched is expected now to be an array of Transaction-shaped objects
-  const commissionEntries: ApiTransaction[] = useMemo(() => {
-    if (!commissionFetched) return [];
-    if (Array.isArray(commissionFetched))
-      return commissionFetched as ApiTransaction[];
-    const asAny = commissionFetched as any;
-    if (Array.isArray(asAny.data)) return asAny.data as ApiTransaction[];
-    if (Array.isArray(asAny.transactions))
-      return asAny.transactions as ApiTransaction[];
-    return [];
-  }, [commissionFetched]);
 
   // normalize status strings: PAID|APPROVED => completed, REJECTED => rejected, else pending
   const statusToNormalized = (
@@ -138,52 +109,9 @@ export default function Transactions() {
       });
   }, [apiTransactions]);
 
-  // Map commission entries (include PAID and REJECTED; exclude PENDING)
-  const transactionRecordsFromCommission: TransactionRecord[] = useMemo(() => {
-    if (!commissionEntries || commissionEntries.length === 0) return [];
-
-    return commissionEntries
-      .map((c) => {
-        const norm = statusToNormalized(
-          c.transactionStatus ?? (c as any).status
-        );
-        // include only non-pending
-        if (norm === "pending") return null;
-
-        const clientName = c.name ?? `User ${c.userId ?? c.id}`;
-        const email = c.email ?? "";
-
-        const status: "completed" | "rejected" =
-          norm === "completed" ? "completed" : "rejected";
-
-        return {
-          id: String(c.id),
-          date: (c.updatedAt ?? c.paidAt ?? c.createdAt ?? "").split("T")[0],
-          clientName,
-          email,
-          amount: -Number(c.amount ?? 0),
-          currency: "",
-          type: "withdrawal",
-          paymentMethod: "Referral",
-          transactionId: String(c.id),
-          status,
-          avatar: undefined,
-          processedAt: c.updatedAt ?? (c as any).paidAt ?? undefined,
-          notes:
-            (c as any).rejectionReason ?? (c as any).month
-              ? `Month: ${(c as any).month}`
-              : undefined,
-        } as TransactionRecord;
-      })
-      .filter(Boolean) as TransactionRecord[];
-  }, [commissionEntries]);
-
   // Combined sorted records (most recent first)
   const allRecords: TransactionRecord[] = useMemo(() => {
-    const combined = [
-      ...transactionRecordsFromTxs,
-      ...transactionRecordsFromCommission,
-    ];
+    const combined = [...transactionRecordsFromTxs];
 
     combined.sort((a, b) => {
       const da = new Date(a.processedAt ?? a.date).getTime();
@@ -192,7 +120,7 @@ export default function Transactions() {
     });
 
     return combined;
-  }, [transactionRecordsFromTxs, transactionRecordsFromCommission]);
+  }, [transactionRecordsFromTxs]);
 
   useEffect(() => {
     console.log("Final merged records ->", allRecords);
