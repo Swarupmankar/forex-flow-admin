@@ -113,10 +113,8 @@ export default function AccountTypes() {
             name: accountTypeData.name,
             description: accountTypeData.description,
             minDeposit: accountTypeData.minDeposit,
-            spread: accountTypeData.spread,
-            spreadProfileId: accountTypeData.spreadProfileId,
-            commission: accountTypeData.commission,
             leverage: accountTypeData.leverage,
+            commission: accountTypeData.commission,
           },
         }).unwrap();
 
@@ -130,15 +128,12 @@ export default function AccountTypes() {
 
         toast.success("Plan updated successfully");
       } else {
-        // ✅ send spreadProfileId from dropdown
         const res = await createPlan({
           name: accountTypeData.name,
           description: accountTypeData.description,
           minDeposit: accountTypeData.minDeposit,
-          spread: accountTypeData.spread,
-          spreadProfileId: accountTypeData.spreadProfileId, // from dropdown
-          commission: accountTypeData.commission,
           leverage: accountTypeData.leverage,
+          commission: accountTypeData.commission,
           takerFeed: accountTypeData.takerFeed,
         }).unwrap();
 
@@ -156,7 +151,6 @@ export default function AccountTypes() {
     const exportData = filteredAccountTypes.map((accountType) => ({
       ...accountType,
       minimumDeposit: accountType.minDeposit,
-      spreadType: accountType.spreadProfileId,
       status: accountType.isActive ? "Active" : "Inactive",
     }));
     exportAccountTypes(exportData, format);

@@ -61,7 +61,6 @@ export function AccountDetailModal({
   const denom = fundsAvailable !== 0 ? fundsAvailable : Math.abs(equity) || 1;
   const unrealizedPnLPercent = (pnl / denom) * 100;
   const leverageValue = Number(account.leverage ?? 1);
-  const maxLeverage = leverageValue * 4;
 
   const readableAccountType = account.accountTypes?.name ?? account.accountType;
 
@@ -166,13 +165,6 @@ export function AccountDetailModal({
                   <Copy className="h-3 w-3" />
                 </Button>
               </div>
-            </div>
-
-            <div>
-              <label className="text-sm text-muted-foreground">
-                Max Leverage
-              </label>
-              <p className="text-lg font-medium">1:{maxLeverage}</p>
             </div>
 
             <div>

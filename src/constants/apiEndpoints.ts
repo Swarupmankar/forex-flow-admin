@@ -30,12 +30,6 @@ export const ENDPOINTS = {
     TOGGLE: (id: number) => `/broker/plans/${id}/toggle`,
     UPDATE: (id: number) => `/broker/plans/update/${id}`,
   },
-  SPREAD_PROFILES: {
-    ALL: "/broker/spread-profile/all-profiles",
-    CREATE: "/broker/spread-profile/add",
-    UPDATE: (id: number) => `/broker/spread-profile/${id}/update`,
-    DELETE: (id: number) => `/broker/spread-profile/${id}`,
-  },
   NOTIFICATIONS: {
     ALL: "/broker/notification/all-notifications",
     CREATE: "/broker/notification/add",

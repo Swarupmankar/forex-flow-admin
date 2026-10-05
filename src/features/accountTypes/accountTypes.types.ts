@@ -7,10 +7,8 @@ export interface BrokerPlan {
   name: string;
   minDeposit: number;
   description: string;
-  spread: number;
-  spreadProfileId: number;
-  commission: number;
   leverage: number;
+  commission: number;
   // The Taker Feed this type's traders are priced on. Set on create, fixed after.
   takerFeed: string;
   // A copy of takerFeed, made by the backend. It is what the trading JWT carries.
@@ -26,11 +24,8 @@ export interface AccountType {
   name: string;
   description: string;
   minDeposit: number;
-  commission: number;
-  spread: number;
-  spreadProfileId: number;
-  spreadProfileName?: string;
   leverage: number;
+  commission: number;
   takerFeed: string;
   isActive: boolean;
   createdAt: string;
@@ -41,10 +36,8 @@ export interface CreatePlanRequest {
   name: string;
   minDeposit: number;
   description: string;
-  spread: number;
-  spreadProfileId: number;
-  commission: number;
   leverage: number;
+  commission: number;
   // Required on create. On update the backend accepts only the existing value,
   // so it is left out.
   takerFeed?: string;

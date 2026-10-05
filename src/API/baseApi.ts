@@ -6,7 +6,6 @@ export const baseApi = createApi({
   baseQuery: axiosBaseQuery(),
   tagTypes: [
     "Users",
-    "SpreadProfiles",
     "Notifications",
     "Transactions",
     "Accounting",

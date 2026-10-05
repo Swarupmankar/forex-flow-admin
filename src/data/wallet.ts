@@ -20,7 +20,6 @@ export interface WalletStats {
   totalDeposits: string;
   totalWithdrawals: string;
   netProfit: string;
-  spreadEarning: string;
   lossesSaved: string;
   brokerFeesEarned: string;
 }
@@ -57,7 +56,6 @@ export const WALLET_STATS: WalletStats = {
   totalDeposits: "10500",
   totalWithdrawals: "0.01",
   netProfit: "9019.99",
-  spreadEarning: "0",
   lossesSaved: "0",
   brokerFeesEarned: "20"
 };

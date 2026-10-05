@@ -10,15 +10,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { AccountType } from "@/features/accountTypes/accountTypes.types";
-import { useGetSpreadProfilesQuery } from "@/API/spreadProfilesApi";
 
 interface AccountTypeModalProps {
   isOpen: boolean;
@@ -33,25 +25,12 @@ export function AccountTypeModal({
   onSave,
   accountType,
 }: AccountTypeModalProps) {
-  const { data: spreadProfilesData, isLoading: isProfilesLoading } =
-    useGetSpreadProfilesQuery();
-
-  const spreadProfiles =
-    spreadProfilesData
-      ?.filter((p) => p.isActive)
-      .map((p) => ({
-        id: p.id,
-        name: p.name,
-      })) ?? [];
-
   const [formData, setFormData] = useState({
     name: "",
     description: "",
     minDeposit: 100,
-    commission: 0,
-    spread: 0,
-    spreadProfileId: 1,
     leverage: 100,
+    commission: 0,
     takerFeed: "",
     isActive: true,
   });
@@ -64,10 +43,8 @@ export function AccountTypeModal({
         name: accountType.name,
         description: accountType.description,
         minDeposit: accountType.minDeposit,
-        commission: accountType.commission,
-        spread: accountType.spread,
-        spreadProfileId: accountType.spreadProfileId,
         leverage: accountType.leverage,
+        commission: accountType.commission,
         takerFeed: accountType.takerFeed,
         isActive: accountType.isActive,
       });
@@ -76,10 +53,8 @@ export function AccountTypeModal({
         name: "",
         description: "",
         minDeposit: 100,
-        commission: 0,
-        spread: 0,
-        spreadProfileId: 1,
         leverage: 100,
+        commission: 0,
         takerFeed: "",
         isActive: true,
       });
@@ -102,16 +77,12 @@ export function AccountTypeModal({
       newErrors.minDeposit = "Minimum deposit must be at least $1";
     }
 
-    if (formData.commission < 0) {
-      newErrors.commission = "Commission is required";
-    }
-
-    if (formData.spread < 0) {
-      newErrors.spread = "Spread must be a positive number";
-    }
-
     if (!Number.isInteger(formData.leverage) || formData.leverage < 1) {
       newErrors.leverage = "Leverage must be a whole number of at least 1";
+    }
+
+    if (formData.commission < 0) {
+      newErrors.commission = "Commission is required";
     }
 
     // Only on create: the feed cannot be changed afterwards. Same rule as the
@@ -230,6 +201,34 @@ export function AccountTypeModal({
               </div>
 
               <div className="space-y-2">
+                <Label htmlFor="leverage">Leverage *</Label>
+                <div className="flex items-center gap-2">
+                  <span className="text-sm text-muted-foreground">1:</span>
+                  <Input
+                    id="leverage"
+                    type="number"
+                    min="1"
+                    step="1"
+                    value={formData.leverage}
+                    onChange={(e) =>
+                      handleInputChange("leverage", parseInt(e.target.value) || 0)
+                    }
+                    placeholder="e.g., 500"
+                    className={errors.leverage ? "border-destructive" : ""}
+                  />
+                </div>
+                {errors.leverage ? (
+                  <p className="text-sm text-destructive">{errors.leverage}</p>
+                ) : (
+                  <p className="text-xs text-muted-foreground">
+                    {accountType
+                      ? "Applies to every trading account on this type, including existing ones. Open positions keep their current margin."
+                      : "Every trading account opened on this type gets this leverage. Traders cannot change it."}
+                  </p>
+                )}
+              </div>
+
+              <div className="space-y-2">
                 <Label htmlFor="commission">Commission *</Label>
                 <Input
                   id="commission"
@@ -248,74 +247,6 @@ export function AccountTypeModal({
                   <p className="text-sm text-destructive">
                     {errors.commission}
                   </p>
-                )}
-              </div>
-
-              <div className="space-y-2">
-                <Label>Spread Profile *</Label>
-                <Select
-                  value={String(formData.spreadProfileId)}
-                  onValueChange={(value) =>
-                    handleInputChange("spreadProfileId", Number(value))
-                  }
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select a spread profile" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {isProfilesLoading ? (
-                      <SelectItem value="loading" disabled>
-                        Loading...
-                      </SelectItem>
-                    ) : spreadProfiles.length > 0 ? (
-                      spreadProfiles.map((profile) => (
-                        <SelectItem key={profile.id} value={String(profile.id)}>
-                          {profile.name}
-                        </SelectItem>
-                      ))
-                    ) : (
-                      <SelectItem value="none" disabled>
-                        No profiles available
-                      </SelectItem>
-                    )}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="spread">Spread *</Label>
-                <Input
-                  id="spread"
-                  type="number"
-                  step="0.01"
-                  value={formData.spread}
-                  onChange={(e) =>
-                    handleInputChange("spread", parseFloat(e.target.value) || 0)
-                  }
-                  placeholder="e.g., 0%, $7 per lot, 0.02%"
-                  className={errors.spread ? "border-destructive" : ""}
-                />
-                {errors.spread && (
-                  <p className="text-sm text-destructive">{errors.spread}</p>
-                )}
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="leverage">Leverage (1:X) *</Label>
-                <Input
-                  id="leverage"
-                  type="number"
-                  min="1"
-                  step="1"
-                  value={formData.leverage}
-                  onChange={(e) =>
-                    handleInputChange("leverage", parseInt(e.target.value) || 0)
-                  }
-                  placeholder="e.g., 100"
-                  className={errors.leverage ? "border-destructive" : ""}
-                />
-                {errors.leverage && (
-                  <p className="text-sm text-destructive">{errors.leverage}</p>
                 )}
               </div>
 

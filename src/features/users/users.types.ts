@@ -145,7 +145,6 @@ export interface TradingAccount {
   leverage: number;
   baseCurrency: string;
   fundsAvailable: string;
-  accountSpread: number;
   createdAt: string;
   updatedAt: string;
   accountTypes?: {

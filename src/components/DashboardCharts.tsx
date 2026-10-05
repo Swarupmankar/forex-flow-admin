@@ -24,7 +24,7 @@ const depositWithdrawalData = [
 const accountTypeData = [
   { name: "Standard", value: 45, color: "hsl(var(--chart-1))" },
   { name: "Pro", value: 30, color: "hsl(var(--chart-2))" },
-  { name: "Raw Spread", value: 20, color: "hsl(var(--chart-3))" },
+  { name: "Raw", value: 20, color: "hsl(var(--chart-3))" },
   { name: "VIP", value: 5, color: "hsl(var(--chart-4))" }
 ];
 
