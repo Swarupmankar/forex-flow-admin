@@ -11,6 +11,7 @@ import type {
   AccountTradesResponse,
   TradeStatusFilter,
   IbOverviewResponse,
+  ActiveTradingAccountsResponse,
 } from "@/features/users/users.types";
 import { ENDPOINTS } from "@/constants/apiEndpoints";
 
@@ -160,6 +161,11 @@ export const usersApi = baseApi.injectEndpoints({
       providesTags: (_res, _err, userId) => [{ type: "Users", id: `ib-${userId}` }],
     }),
 
+    getActiveTradingAccounts: build.query<ActiveTradingAccountsResponse, void>({
+      query: () => ({ url: ENDPOINTS.ACTIVE_TRADING_ACCOUNTS, method: "GET" }),
+      providesTags: [{ type: "Users", id: "ACTIVE_ACCOUNTS" }],
+    }),
+
     /** --------  send custom message -------- */
     sendCustomMessage: build.mutation<any, CustomMessagePayload>({
       query: (payload) => ({
@@ -241,6 +247,7 @@ export const {
   useGetTradingAccountsQuery,
   useGetTradingAccountTradesQuery,
   useGetClientIbOverviewQuery,
+  useGetActiveTradingAccountsQuery,
   useSendCustomMessageMutation,
   useGetCustomMessageHistoryQuery,
   useUpdateAccountStatusMutation,

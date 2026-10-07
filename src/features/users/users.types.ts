@@ -337,3 +337,24 @@ export interface IbOverviewResponse {
   ledger: IbLedgerEntry[];
   withdrawals: IbWithdrawal[];
 }
+
+/** One calendar month of active trading accounts. */
+export interface ActiveAccountsPeriod {
+  /** YYYY-MM in the IB programme's timezone. */
+  month: string;
+  /** REAL accounts that closed at least minLots lots in the month. */
+  active: number;
+  /** REAL accounts that closed any trade in the month. */
+  traded: number;
+  closedLots: number;
+}
+
+export interface ActiveTradingAccountsResponse {
+  /** The IB programme's active-trader minimum; 0 means any closed trade. */
+  minLots: number;
+  timezone: string;
+  /** REAL accounts not archived. */
+  realAccounts: number;
+  thisMonth: ActiveAccountsPeriod;
+  lastMonth: ActiveAccountsPeriod;
+}

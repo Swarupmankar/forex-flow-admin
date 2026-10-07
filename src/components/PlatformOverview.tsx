@@ -1,13 +1,15 @@
 import { Users, UserCheck, FileX, Settings2 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
-import { useGetAllUsersQuery } from "@/API/users.api";
+import { useGetActiveTradingAccountsQuery, useGetAllUsersQuery } from "@/API/users.api";
 import { useGetPlansQuery } from "@/API/accountTypes.api";
 
-// A null value means the backend has no endpoint for this number yet. It is
-// shown as a dash rather than an invented figure.
+// A null value means the number could not be loaded. It is shown as a dash
+// rather than an invented figure.
 type Stat = {
   title: string;
   value: number | null;
+  /** A smaller line under the title. */
+  hint?: string;
   isLoading: boolean;
   icon: typeof Users;
   iconColor: string;
@@ -16,6 +18,9 @@ type Stat = {
 export function PlatformOverview() {
   const { data: users, isLoading: isUsersLoading } = useGetAllUsersQuery();
   const { data: plansData, isLoading: isPlansLoading } = useGetPlansQuery();
+  // Active = a REAL account that closed the IB programme's active-trader lots
+  // (one trade or several) in the calendar month.
+  const { data: activeData, isLoading: isActiveLoading } = useGetActiveTradingAccountsQuery();
 
   const pendingKyc = users
     ? users.filter((u) => u.kycStatus?.toUpperCase() === "PENDING").length
@@ -31,8 +36,8 @@ export function PlatformOverview() {
     },
     {
       title: "Active Trading Accounts",
-      value: null,
-      isLoading: false,
+      value: activeData ? activeData.thisMonth.active : null,
+      isLoading: isActiveLoading,
       icon: UserCheck,
       iconColor: "bg-green-100 text-green-600",
     },
@@ -80,6 +85,9 @@ export function PlatformOverview() {
                       : stat.value.toLocaleString("en-US")}
                   </p>
                   <p className="text-sm font-medium text-muted-foreground mt-1">{stat.title}</p>
+                  {stat.hint && !stat.isLoading && (
+                    <p className="text-xs text-muted-foreground mt-0.5">{stat.hint}</p>
+                  )}
                 </div>
               </div>
             </CardContent>

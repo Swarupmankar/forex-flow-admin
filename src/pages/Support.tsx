@@ -69,8 +69,12 @@ export default function Support() {
 
   // ✅ Real-time Support WebSocket
   useSupportSocket({
-    brokerId: 1,
     ticketId: selectedTicketId ?? undefined,
+    onReconnect: useCallback(() => {
+      refetchTickets();
+      refetchAll();
+      if (selectedTicketId) refetchTicketDetail();
+    }, [refetchTickets, refetchAll, refetchTicketDetail, selectedTicketId]),
     onNewReply: useCallback(() => {
       refetchTickets();
       refetchAll();

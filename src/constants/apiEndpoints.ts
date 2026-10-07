@@ -17,6 +17,8 @@ export const ENDPOINTS = {
   TRADING_ACCOUNT_TRADES: "/broker/client/trading-account-trades",
   // One client's IB picture: referred clients, commission by month, payouts.
   CLIENT_IB_OVERVIEW: "/broker/client/ib-overview",
+  // REAL accounts active by the IB active-trader rule, this month and last.
+  ACTIVE_TRADING_ACCOUNTS: "/broker/client/active-trading-accounts",
   CUSTOM_MESSAGE: "/broker/client/custom-message",
   CUSTOM_MESSAGE_HISTORY: "/broker/client/custom-message-history",
   ISACTIVE: "/broker/client/update-accounts",

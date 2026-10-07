@@ -1,6 +1,9 @@
 // src/services/axiosInstance.ts
 import axios from "axios";
 import type { InternalAxiosRequestConfig } from "axios";
+import { endSession } from "@/lib/session";
+
+const LOGIN_URL = "/broker/auth/login";
 
 export const isTokenExpired = (token: string | null): boolean => {
   if (!token) return true;
@@ -29,18 +32,7 @@ api.interceptors.request.use(
     const token = localStorage.getItem("token");
     if (token) {
       if (isTokenExpired(token)) {
-        try {
-          localStorage.clear();
-        } catch (e) {
-          // ignore
-        }
-
-        if (
-          typeof window !== "undefined" &&
-          window.location.pathname !== "/login"
-        ) {
-          window.location.href = "/login";
-        }
+        endSession("expired");
         return Promise.reject(new axios.Cancel("Token expired"));
       }
       config.headers.Authorization = `Bearer ${token}`;
@@ -63,21 +55,11 @@ api.interceptors.response.use(
   (error) => {
     const status = error?.response?.status;
 
-    // On ANY 401 Unauthorized response from server — force logout client-side.
-    if (status === 401) {
-      try {
-        localStorage.clear();
-      } catch (e) {
-        // ignore
-      }
-
-      // Redirect to login if not already there
-      if (
-        typeof window !== "undefined" &&
-        window.location.pathname !== "/login"
-      ) {
-        window.location.href = "/login";
-      }
+    // A 401 from any API ends the session. Not the login call itself: there a
+    // 401 is a wrong password, shown on the form.
+    const url: string = error?.config?.url ?? "";
+    if (status === 401 && !url.includes(LOGIN_URL)) {
+      endSession("unauthorized");
     }
 
     return Promise.reject(error);
