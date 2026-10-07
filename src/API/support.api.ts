@@ -7,21 +7,36 @@ import type {
 } from "@/features/support/support.types";
 import { ENDPOINTS } from "@/constants/apiEndpoints";
 
+const TICKETS_PAGE_SIZE = 100;
+
 export const supportApi = baseApi.injectEndpoints({
   endpoints: (build) => ({
     /** ------- Get all tickets (with optional filters) ------- */
-    getTickets: build.query<
-      SupportTicketResponse,
-      { status?: string; page?: number }
-    >({
-      query: ({ status, page = 1 }) => ({
-        url: ENDPOINTS.SUPPORT.ALL_TICKETS,
-        method: "GET",
-        params: {
-          ...(status ? { status } : {}),
-          page,
-        },
-      }),
+    // Walks every page: the endpoint defaults to 10 a page, and the inbox,
+    // its search and its counts all need the whole list, not the newest ten.
+    getTickets: build.query<SupportTicketResponse, { status?: string }>({
+      async queryFn({ status }, _api, _extraOptions, baseQuery) {
+        const tickets: SupportTicketResponse["tickets"] = [];
+        let last: SupportTicketResponse | undefined;
+        for (let page = 1; ; page++) {
+          const res = await baseQuery({
+            url: ENDPOINTS.SUPPORT.ALL_TICKETS,
+            method: "GET",
+            params: { ...(status ? { status } : {}), page, limit: TICKETS_PAGE_SIZE },
+          });
+          if (res.error) return { error: res.error };
+          last = res.data as SupportTicketResponse;
+          tickets.push(...last.tickets);
+          if (page >= last.pagination.pages || last.tickets.length === 0) break;
+        }
+        return {
+          data: {
+            message: last?.message ?? "",
+            tickets,
+            pagination: { page: 1, limit: tickets.length, total: tickets.length, pages: 1 },
+          },
+        };
+      },
       providesTags: ["Users"],
     }),
 

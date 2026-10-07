@@ -1,22 +1,46 @@
-import { useState, useRef, useEffect } from "react";
-import { X, Paperclip, Send, User, CheckCircle, ShieldCheck, Tag, AlertTriangle, Eye } from "lucide-react";
+import { useState, useRef, useEffect, useMemo } from "react";
+import { useSelector } from "react-redux";
+import { format, formatDistanceToNow, isSameDay, isToday, isYesterday } from "date-fns";
+import {
+  X,
+  Paperclip,
+  Send,
+  CheckCircle,
+  ShieldCheck,
+  Tag,
+  Eye,
+  Clock,
+  Headset,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
-import { ScrollArea } from "@/components/ui/scroll-area";
-import { Dialog, DialogContent, DialogTrigger } from "@/components/ui/dialog";
+import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 import { SupportTicket } from "@/features/support/support.types";
+import { useSendReplyMutation, useCloseTicketMutation } from "@/API/support.api";
 import {
-  useSendReplyMutation,
-  useCloseTicketMutation,
-} from "@/API/support.api";
+  useGetCryptoWithdrawFeeQuery,
+  useGetIbMinWithdrawQuery,
+} from "@/API/cryptoRails.api";
+import type { TemplateVars } from "@/features/support/replyTemplates";
 import { toast } from "sonner";
-import { getStatusBadgeConfig, getPriorityBadgeConfig } from "./SupportTicketList";
+import { getStatusBadgeConfig, getPriorityBadgeConfig, categoryLabel, initialsOf } from "./SupportTicketList";
+import { ReplyTemplatePicker } from "./ReplyTemplatePicker";
 
 interface SupportTicketDetailProps {
   ticket: SupportTicket;
 }
+
+type AuthUser = { name?: string | null; username?: string | null } | null;
+
+const usd = (n: number) =>
+  n.toLocaleString("en-US", { style: "currency", currency: "USD" });
+
+const dayLabel = (d: Date) =>
+  isToday(d) ? "Today" : isYesterday(d) ? "Yesterday" : format(d, "EEEE, dd MMM yyyy");
+
+const validDate = (d?: Date | null): d is Date => !!d && !isNaN(d.getTime());
 
 export function SupportTicketDetail({ ticket }: SupportTicketDetailProps) {
   const [replyText, setReplyText] = useState("");
@@ -26,25 +50,44 @@ export function SupportTicketDetail({ ticket }: SupportTicketDetailProps) {
   const [sendReply, { isLoading: isSending }] = useSendReplyMutation();
   const [closeTicket, { isLoading: isClosing }] = useCloseTicketMutation();
 
+  // Live broker settings, so templates quote what the platform actually charges.
+  const { data: feeData } = useGetCryptoWithdrawFeeQuery();
+  const { data: minData } = useGetIbMinWithdrawQuery();
+  const broker = useSelector((s: { auth: { user: AuthUser } }) => s.auth.user);
+
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
 
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  };
-
   useEffect(() => {
-    scrollToBottom();
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [ticket.id, ticket.messages.length]);
 
-  const formatDate = (date?: Date | null) => {
-    if (!date || isNaN(date.getTime())) return "N/A";
-    return new Intl.DateTimeFormat("en-US", {
-      month: "short",
-      day: "numeric",
-      year: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-    }).format(date);
+  // A draft belongs to the ticket it was written for.
+  useEffect(() => {
+    setReplyText("");
+    setFile(null);
+  }, [ticket.id]);
+
+  const templateVars: TemplateVars = useMemo(
+    () => ({
+      clientName: ticket.clientName.split(" ")[0] || "there",
+      ticketId: ticket.ticketId,
+      agentName: ticket.assignedAgent || "Support Team",
+      // Reads as "contacting our platform support" when no name is set.
+      brokerName: broker?.name || broker?.username || "our platform",
+      cryptoWithdrawFee: feeData ? usd(feeData.cryptoWithdrawFee) : "the published fee",
+      ibMinWithdraw: minData ? usd(minData.ibMinWithdraw) : "the published minimum",
+    }),
+    [ticket.clientName, ticket.ticketId, ticket.assignedAgent, broker, feeData, minData]
+  );
+
+  const insertTemplate = (text: string) => {
+    const previous = replyText;
+    setReplyText(text);
+    if (previous.trim()) {
+      toast("Template replaced your draft", {
+        action: { label: "Undo", onClick: () => setReplyText(previous) },
+      });
+    }
   };
 
   const handleSendReply = async () => {
@@ -59,245 +102,277 @@ export function SupportTicketDetail({ ticket }: SupportTicketDetailProps) {
         file: file ?? undefined,
       }).unwrap();
 
-      toast.success("Reply sent successfully");
+      toast.success("Reply sent");
       setReplyText("");
       setFile(null);
-    } catch (err: any) {
-      toast.error(err?.data?.message || "Failed to send reply");
+    } catch (err) {
+      toast.error((err as { data?: { message?: string } })?.data?.message || "Failed to send reply");
     }
   };
 
   const handleCloseTicket = async () => {
     try {
       await closeTicket({ ticketId: ticket.id }).unwrap();
-      toast.success("Ticket closed successfully");
-    } catch (err: any) {
-      toast.error(err?.data?.message || "Failed to close ticket");
+      toast.success("Ticket closed");
+    } catch (err) {
+      toast.error((err as { data?: { message?: string } })?.data?.message || "Failed to close ticket");
     }
   };
 
   const statusConfig = getStatusBadgeConfig(ticket.status);
   const priorityConfig = getPriorityBadgeConfig(ticket.priority);
-  const isTicketClosed = (ticket.status || "").toLowerCase() === "closed" || (ticket.status || "").toLowerCase() === "resolved";
+  const status = (ticket.status || "").toLowerCase();
+  const isTicketClosed = status === "closed" || status === "resolved";
 
   return (
-    <div className="h-full flex flex-col bg-card rounded-xl border shadow-sm overflow-hidden">
-      {/* Top Header */}
-      <div className="p-5 border-b bg-muted/15 shrink-0 space-y-3">
+    <div className="flex h-full flex-col overflow-hidden rounded-xl border bg-card shadow-sm">
+      {/* Header */}
+      <div className="shrink-0 border-b bg-gradient-to-r from-primary/5 to-transparent px-4 py-3">
         <div className="flex items-start justify-between gap-4">
-          <div className="space-y-1 min-w-0">
-            <div className="flex items-center gap-2 flex-wrap">
-              <h1 className="text-lg font-bold tracking-tight text-foreground truncate">
+          <div className="flex min-w-0 items-start gap-3">
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary/15 text-xs font-bold text-primary">
+              {initialsOf(ticket.clientName)}
+            </div>
+            <div className="min-w-0 space-y-1.5">
+              <h1 className="truncate text-sm font-semibold text-foreground">
                 {ticket.title}
               </h1>
-              <Badge variant="outline" className={cn("text-xs font-semibold px-2 py-0.5", statusConfig.className)}>
-                {statusConfig.label}
-              </Badge>
-              {ticket.priority && (
-                <Badge variant="outline" className={cn("text-xs px-2 py-0.5", priorityConfig.className)}>
-                  {priorityConfig.label} Priority
+              <div className="flex flex-wrap items-center gap-1.5">
+                <Badge variant="outline" className={cn("px-1.5 py-0 text-[10px] font-semibold", statusConfig.className)}>
+                  {statusConfig.label}
                 </Badge>
-              )}
-            </div>
-
-            <div className="flex items-center gap-3 text-xs text-muted-foreground flex-wrap pt-0.5">
-              <span className="font-mono bg-muted px-1.5 py-0.5 rounded text-foreground/80 font-medium">
-                #{ticket.ticketId}
-              </span>
-              <span className="flex items-center gap-1 font-medium text-foreground/90">
-                <User className="h-3.5 w-3.5 text-primary" />
-                {ticket.clientName}
-              </span>
-              {ticket.category && (
-                <span className="flex items-center gap-1">
-                  <Tag className="h-3.5 w-3.5 text-muted-foreground/70" />
-                  {ticket.category}
-                </span>
-              )}
-              <span>Opened: {formatDate(ticket.createdAt)}</span>
+                {ticket.priority && (
+                  <Badge variant="outline" className={cn("px-1.5 py-0 text-[10px]", priorityConfig.className)}>
+                    {priorityConfig.label} priority
+                  </Badge>
+                )}
+                {ticket.category && (
+                  <Badge variant="outline" className="gap-1 px-1.5 py-0 text-[10px] text-muted-foreground">
+                    <Tag className="h-3 w-3" />
+                    {categoryLabel(ticket.category)}
+                  </Badge>
+                )}
+              </div>
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-muted-foreground">
+                <span className="font-semibold text-foreground/90">{ticket.clientName}</span>
+                <span className="rounded bg-muted px-1.5 py-0.5 font-mono">#{ticket.ticketId}</span>
+                {validDate(ticket.createdAt) && (
+                  <span className="flex items-center gap-1">
+                    <Clock className="h-3 w-3" />
+                    Opened {formatDistanceToNow(ticket.createdAt, { addSuffix: true })}
+                  </span>
+                )}
+              </div>
             </div>
           </div>
 
-          {/* Action Buttons */}
-          <div className="flex items-center gap-2 shrink-0">
+          <div className="flex shrink-0 items-center gap-2">
             {ticket.assignedAgent && (
-              <div className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-primary/10 border border-primary/20 text-xs font-semibold text-primary">
-                <ShieldCheck className="h-4 w-4" />
-                <span>Agent: {ticket.assignedAgent}</span>
+              <div className="hidden items-center gap-1 rounded-md border border-primary/20 bg-primary/10 px-2 py-1 text-[11px] font-semibold text-primary sm:flex">
+                <ShieldCheck className="h-3.5 w-3.5" />
+                {ticket.assignedAgent}
               </div>
             )}
-
             <Button
               variant={isTicketClosed ? "outline" : "destructive"}
               size="sm"
               onClick={handleCloseTicket}
               disabled={isTicketClosed || isClosing}
-              className="h-8 text-xs font-medium"
+              className="h-7 px-2.5 text-[11px] font-medium"
             >
-              {isClosing ? "Closing..." : isTicketClosed ? "Closed" : "Close Ticket"}
+              {isClosing ? "Closing..." : isTicketClosed ? "Closed" : "Close ticket"}
             </Button>
           </div>
         </div>
       </div>
 
-      {/* Messages Scroll Area */}
-      <ScrollArea className="flex-1 px-6 py-5">
-        <div className="space-y-5 w-full">
-          {ticket.messages.map((message) => {
+      {/* Messages */}
+      <div className="min-h-0 flex-1 overflow-y-auto bg-muted/10 px-5 py-4">
+        <div className="w-full space-y-3">
+          {ticket.messages.map((message, i) => {
             const isClient = message.sender === "client";
+            const prev = ticket.messages[i - 1];
+            const showDay =
+              validDate(message.createdAt) &&
+              (!prev || !validDate(prev.createdAt) || !isSameDay(prev.createdAt, message.createdAt));
+            const name =
+              message.senderName || (isClient ? ticket.clientName : ticket.assignedAgent || "Support Team");
 
             return (
-              <div
-                key={message.id}
-                className={cn(
-                  "flex flex-col space-y-1.5 max-w-[85%] sm:max-w-[75%]",
-                  isClient ? "mr-auto items-start" : "ml-auto items-end"
+              <div key={message.id} className="space-y-3">
+                {showDay && (
+                  <div className="flex items-center gap-3 text-[10px] font-medium text-muted-foreground">
+                    <div className="h-px flex-1 bg-border" />
+                    {dayLabel(message.createdAt)}
+                    <div className="h-px flex-1 bg-border" />
+                  </div>
                 )}
-              >
-                {/* Sender Header */}
-                <div className="flex items-center gap-2 text-xs text-muted-foreground px-1">
-                  <span className="font-semibold text-foreground/90">
-                    {message.senderName || (isClient ? ticket.clientName : ticket.assignedAgent || "Support Team")}
-                  </span>
-                  <span>•</span>
-                  <span className="text-[11px]">{formatDate(message.createdAt)}</span>
-                </div>
 
-                {/* Message Bubble */}
-                <div
-                  className={cn(
-                    "p-4 rounded-2xl text-sm leading-relaxed whitespace-pre-wrap shadow-xs border",
-                    isClient
-                      ? "bg-muted/60 text-foreground border-border/80 rounded-tl-xs"
-                      : "bg-primary text-primary-foreground border-primary/20 rounded-tr-xs"
-                  )}
-                >
-                  <p>{message.content}</p>
+                <div className={cn("flex items-end gap-2", isClient ? "justify-start" : "flex-row-reverse")}>
+                  <div
+                    className={cn(
+                      "flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-[10px] font-bold",
+                      isClient ? "bg-muted text-foreground" : "bg-primary text-primary-foreground"
+                    )}
+                    title={name}
+                  >
+                    {isClient ? initialsOf(name) : <Headset className="h-3.5 w-3.5" />}
+                  </div>
 
-                  {/* Attachment Thumbnails */}
-                  {message.attachments && message.attachments.length > 0 && (
-                    <div className="mt-3 flex gap-2 flex-wrap">
-                      {message.attachments.map((src, i) => (
-                        <div
-                          key={i}
-                          onClick={() => setActiveImage(src)}
-                          className="relative group cursor-pointer overflow-hidden rounded-lg border border-border/40 bg-black/10"
-                        >
-                          <img
-                            src={src}
-                            alt="Attachment"
-                            className="w-36 h-36 object-cover transition-transform duration-200 group-hover:scale-105"
-                          />
-                          <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white">
-                            <Eye className="h-5 w-5" />
-                          </div>
-                        </div>
-                      ))}
+                  <div className={cn("flex max-w-[80%] flex-col gap-1 sm:max-w-[70%]", isClient ? "items-start" : "items-end")}>
+                    <div className="flex items-center gap-1.5 px-1 text-[10px] text-muted-foreground">
+                      <span className="font-semibold text-foreground/80">{name}</span>
+                      {validDate(message.createdAt) && <span>· {format(message.createdAt, "HH:mm")}</span>}
                     </div>
-                  )}
+                    <div
+                      className={cn(
+                        "whitespace-pre-wrap break-words rounded-2xl border px-3 py-2 text-xs leading-relaxed shadow-sm",
+                        isClient
+                          ? "rounded-bl-sm border-border/80 bg-card text-foreground"
+                          : "rounded-br-sm border-primary/20 bg-primary text-primary-foreground"
+                      )}
+                    >
+                      {message.content && <p>{message.content}</p>}
+
+                      {message.attachments && message.attachments.length > 0 && (
+                        <div className="mt-3 flex flex-wrap gap-2">
+                          {message.attachments.map((src, j) => (
+                            <button
+                              key={j}
+                              type="button"
+                              onClick={() => setActiveImage(src)}
+                              className="group relative overflow-hidden rounded-lg border border-border/40 bg-black/10"
+                            >
+                              <img
+                                src={src}
+                                alt="Attachment"
+                                className="h-28 w-28 object-cover transition-transform duration-200 group-hover:scale-105"
+                              />
+                              <div className="absolute inset-0 flex items-center justify-center bg-black/40 text-white opacity-0 transition-opacity group-hover:opacity-100">
+                                <Eye className="h-5 w-5" />
+                              </div>
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
                 </div>
               </div>
             );
           })}
 
           {ticket.messages.length === 0 && (
-            <div className="text-center py-12 text-muted-foreground text-sm">
-              No message history found for this ticket.
+            <div className="py-12 text-center text-sm text-muted-foreground">
+              No messages on this ticket yet.
             </div>
           )}
 
           <div ref={messagesEndRef} />
         </div>
-      </ScrollArea>
+      </div>
 
-      {/* Image Viewer Lightbox Modal */}
       {activeImage && (
         <Dialog open={!!activeImage} onOpenChange={() => setActiveImage(null)}>
-          <DialogContent className="max-w-4xl p-2 bg-black/90 border-none text-white shadow-2xl flex items-center justify-center">
+          <DialogContent className="flex max-w-4xl items-center justify-center border-none bg-black/90 p-2 text-white shadow-2xl">
             <img
               src={activeImage}
-              alt="Attachment Full Preview"
-              className="max-h-[85vh] max-w-full object-contain rounded-lg"
+              alt="Attachment full preview"
+              className="max-h-[85vh] max-w-full rounded-lg object-contain"
             />
           </DialogContent>
         </Dialog>
       )}
 
-      {/* Footer Reply Form / Resolved Banner */}
-      <div className="p-4 border-t bg-background shrink-0">
+      {/* Composer */}
+      <div className="shrink-0 border-t bg-background p-3">
         {isTicketClosed ? (
-          <div className="p-4 bg-purple-500/10 border border-purple-500/20 rounded-xl flex items-center gap-3.5 shadow-xs">
-            <div className="h-9 w-9 rounded-full bg-purple-600 text-white flex items-center justify-center shrink-0 shadow-xs">
+          <div className="flex items-center gap-3.5 rounded-xl border border-purple-500/20 bg-purple-500/10 p-4">
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-purple-600 text-white">
               <CheckCircle className="h-5 w-5" />
             </div>
             <div>
-              <h4 className="text-xs font-bold text-purple-950 dark:text-purple-300 tracking-tight">
-                This support ticket is resolved & closed
+              <h4 className="text-xs font-bold tracking-tight text-purple-950 dark:text-purple-300">
+                This ticket is resolved & closed
               </h4>
-              <p className="text-[11px] text-purple-700/90 dark:text-purple-400 font-medium mt-0.5">
-                This conversation is closed for new replies. No further actions required.
+              <p className="mt-0.5 text-[11px] font-medium text-purple-700/90 dark:text-purple-400">
+                The conversation is closed for new replies.
               </p>
             </div>
           </div>
         ) : (
-          <div className="w-full space-y-3">
-            {file && (
-              <div className="flex items-center gap-2 px-3 py-1.5 bg-muted rounded-md text-xs w-fit">
-                <Paperclip className="h-3.5 w-3.5 text-primary" />
-                <span className="font-medium truncate max-w-[200px]">{file.name}</span>
-                <button
-                  type="button"
-                  onClick={() => setFile(null)}
-                  className="text-muted-foreground hover:text-foreground ml-1"
-                >
-                  <X className="h-3.5 w-3.5" />
-                </button>
-              </div>
-            )}
+          <div className="space-y-2.5">
+            <ReplyTemplatePicker
+              category={ticket.category}
+              vars={templateVars}
+              onInsert={insertTemplate}
+              disabled={isSending}
+            />
 
-            <div className="flex gap-2">
+            <div className="rounded-xl border bg-background focus-within:ring-1 focus-within:ring-primary/40">
               <Textarea
-                placeholder="Write a response to the client..."
+                placeholder="Write a reply… (Ctrl + Enter to send)"
                 value={replyText}
                 onChange={(e) => setReplyText(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {
+                    e.preventDefault();
+                    handleSendReply();
+                  }
+                }}
                 disabled={isSending}
-                className="min-h-[70px] max-h-[140px] text-xs resize-none bg-background focus-visible:ring-1"
+                className="max-h-[160px] min-h-[60px] resize-none border-0 text-xs shadow-none focus-visible:ring-0"
               />
-            </div>
 
-            <div className="flex items-center justify-between">
-              <label
-                className={cn(
-                  "flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground cursor-pointer px-2 py-1 rounded transition-colors",
-                  isSending && "pointer-events-none opacity-50"
-                )}
-              >
-                <Paperclip className="h-4 w-4" />
-                <span>Attach image</span>
-                <input
-                  type="file"
-                  accept="image/*"
-                  className="hidden"
-                  onChange={(e) => setFile(e.target.files?.[0] || null)}
-                  disabled={isSending}
-                />
-              </label>
+              <div className="flex items-center justify-between gap-2 border-t px-2 py-1.5">
+                <div className="flex min-w-0 items-center gap-2">
+                  <label
+                    className={cn(
+                      "flex cursor-pointer items-center gap-1.5 rounded px-2 py-1 text-xs text-muted-foreground transition-colors hover:text-foreground",
+                      isSending && "pointer-events-none opacity-50"
+                    )}
+                  >
+                    <Paperclip className="h-4 w-4" />
+                    <span>Attach image</span>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={(e) => setFile(e.target.files?.[0] || null)}
+                      disabled={isSending}
+                    />
+                  </label>
+                  {file && (
+                    <span className="flex min-w-0 items-center gap-1 rounded-md bg-muted px-2 py-0.5 text-xs">
+                      <span className="truncate font-medium">{file.name}</span>
+                      <button
+                        type="button"
+                        onClick={() => setFile(null)}
+                        className="text-muted-foreground hover:text-foreground"
+                        aria-label="Remove attachment"
+                      >
+                        <X className="h-3.5 w-3.5" />
+                      </button>
+                    </span>
+                  )}
+                </div>
 
-              <Button
-                size="sm"
-                onClick={handleSendReply}
-                disabled={isSending || (!replyText.trim() && !file)}
-                className="h-8 px-4 text-xs font-semibold"
-              >
-                {isSending ? (
-                  "Sending..."
-                ) : (
-                  <>
-                    <Send className="h-3.5 w-3.5 mr-1.5" />
-                    Send Reply
-                  </>
-                )}
-              </Button>
+                <Button
+                  size="sm"
+                  onClick={handleSendReply}
+                  disabled={isSending || (!replyText.trim() && !file)}
+                  className="h-7 px-3 text-[11px] font-semibold"
+                >
+                  {isSending ? (
+                    "Sending..."
+                  ) : (
+                    <>
+                      <Send className="mr-1.5 h-3.5 w-3.5" />
+                      Send reply
+                    </>
+                  )}
+                </Button>
+              </div>
             </div>
           </div>
         )}

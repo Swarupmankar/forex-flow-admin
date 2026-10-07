@@ -3,6 +3,7 @@ import { PlatformOverview } from "@/components/PlatformOverview";
 import { FinancialSummary } from "@/components/FinancialSummary";
 import { QuickActions } from "@/components/QuickActions";
 import { RecentActivity } from "@/components/RecentActivity";
+import { TopTen } from "@/components/TopTen";
 
 const Index = () => {
   return (
@@ -17,6 +18,9 @@ const Index = () => {
         {/* Quick Actions Section */}
         <QuickActions />
         
+        {/* Top 10 rankings */}
+        <TopTen />
+
         {/* Recent Activity Table */}
         <RecentActivity />
       </div>

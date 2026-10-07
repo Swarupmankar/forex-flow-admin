@@ -3,6 +3,10 @@ import { DashboardLayout } from "@/components/DashboardLayout";
 import { WalletHeader } from "@/components/wallet/WalletHeader";
 import { FinancialSummaryCards } from "@/components/wallet/FinancialSummaryCards";
 import { CryptoRailsCard } from "@/components/wallet/CryptoRailsCard";
+import { RevenueOverview } from "@/components/wallet/RevenueOverview";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Button } from "@/components/ui/button";
+import { AlertCircle } from "lucide-react";
 import { WalletBalanceSection } from "@/components/wallet/WalletBalanceSection";
 import { TransactionFilters } from "@/components/wallet/TransactionFilters";
 import { TransactionHistoryTable } from "@/components/wallet/TransactionHistoryTable";
@@ -95,8 +99,7 @@ export default function Wallet() {
         totalDeposits: accountingData.totalDeposits,
         totalWithdrawals: accountingData.totalWithdrawals,
         netProfit: accountingData.netProfit,
-        brokerFeesEarned: accountingData.brokerFeesEarned,
-        lossesSaved: accountingData.lossesSaved,
+        ibPayouts: accountingData.ibPayouts,
       }
     : null;
 
@@ -219,74 +222,73 @@ export default function Wallet() {
           onDateRangeChange={setDateRange}
         />
 
-        {/* Financial summary */}
-        {isAccountingLoading && (
-          <div className="p-4 bg-muted rounded-md">
-            Loading financial summary…
-          </div>
-        )}
-        {isAccountingError && (
-          <div className="p-4 bg-red-50 border border-red-200 rounded-md">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="font-semibold text-red-700">
-                  Failed to load accounting summary
-                </p>
-                <p className="text-sm text-red-600 mt-1">
-                  {String(accountingError ?? "Unknown error")}
-                </p>
-              </div>
-              <div>
-                <button
-                  onClick={() => refetchAccounting()}
-                  className="px-3 py-2 bg-red-600 text-white rounded-md"
-                >
-                  Retry
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
-        {financialSummary && <FinancialSummaryCards data={financialSummary} />}
+        {/* Revenue */}
+        <section className="space-y-3">
+          <SectionHeading
+            title="Revenue"
+            description="What the broker earns from client trading"
+          />
+          <RevenueOverview
+            commissionEarned={accountingData?.brokerFeesEarned ?? null}
+            ibWithdrawals={accountingData?.ibWithdrawals ?? null}
+            isCommissionLoading={isAccountingLoading}
+          />
+        </section>
 
-        {/* Sits under the fiat summary deliberately: the crypto rails run their
-            own P&L, and the wallet balance above reads as short by design. */}
+        {/* Cash flow */}
+        <section className="space-y-3">
+          <SectionHeading
+            title="Cash Flow"
+            description="Client money in and out of the broker"
+          />
+          {isAccountingLoading && (
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+              {[0, 1, 2, 3].map((i) => (
+                <Skeleton key={i} className="h-32 rounded-lg" />
+              ))}
+            </div>
+          )}
+          {isAccountingError && (
+            <LoadError
+              title="Failed to load accounting summary"
+              error={accountingError}
+              onRetry={refetchAccounting}
+            />
+          )}
+          {financialSummary && <FinancialSummaryCards data={financialSummary} />}
+        </section>
+
+        {/* Kept apart from the fiat figures: the crypto rails run their own
+            P&L, and the wallet balance below reads as short by design. */}
         <CryptoRailsCard />
 
         {/* Wallet balances */}
-        {isWalletLoading && (
-          <div className="p-4 bg-muted rounded-md">
-            Loading wallet balances…
-          </div>
-        )}
-        {isWalletError && (
-          <div className="p-4 bg-red-50 border border-red-200 rounded-md">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="font-semibold text-red-700">
-                  Failed to load wallet balances
-                </p>
-                <p className="text-sm text-red-600 mt-1">
-                  {String(walletError ?? "Unknown error")}
-                </p>
-              </div>
-              <div>
-                <button
-                  onClick={() => refetchWallet()}
-                  className="px-3 py-2 bg-red-600 text-white rounded-md"
-                >
-                  Retry
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
+        <section className="space-y-3">
+          <SectionHeading
+            title="Balances"
+            description="Broker wallets you can withdraw from or replenish"
+          />
+          {isWalletLoading && <Skeleton className="h-56 rounded-lg" />}
+          {isWalletError && (
+            <LoadError
+              title="Failed to load wallet balances"
+              error={walletError}
+              onRetry={refetchWallet}
+            />
+          )}
+          {!isWalletLoading && !isWalletError && (
+            <WalletBalanceSection
+              balances={walletBalances}
+              replenishAmount={replenishAmount}
+              onWithdraw={handleWithdraw}
+              onReplenish={handleReplenish}
+            />
+          )}
+        </section>
 
-        <WalletBalanceSection
-          balances={walletBalances}
-          replenishAmount={replenishAmount}
-          onWithdraw={handleWithdraw}
-          onReplenish={handleReplenish}
+        <SectionHeading
+          title="Transaction History"
+          description="Broker wallet withdrawals and replenishments"
         />
 
         <TransactionFilters
@@ -331,18 +333,53 @@ export default function Wallet() {
           selectedWallet={selectedWallet}
           currentBalances={walletBalances ?? null}
         />
-
-        <ReplenishFundsModal
-          isOpen={isReplenishModalOpen}
-          onClose={() => {
-            setIsReplenishModalOpen(false);
-            setSelectedWallet(null);
-          }}
-          onSubmit={handleReplenishSubmit}
-          selectedWallet={selectedWallet}
-          currentBalances={walletBalances}
-        />
       </div>
     </DashboardLayout>
+  );
+}
+
+function SectionHeading({
+  title,
+  description,
+}: {
+  title: string;
+  description: string;
+}) {
+  return (
+    <div>
+      <h2 className="text-lg font-semibold text-foreground">{title}</h2>
+      <p className="text-sm text-muted-foreground">{description}</p>
+    </div>
+  );
+}
+
+function LoadError({
+  title,
+  error,
+  onRetry,
+}: {
+  title: string;
+  error: unknown;
+  onRetry: () => void;
+}) {
+  // RTK Query errors are objects; String() on one prints "[object Object]".
+  const message =
+    (error as { data?: { message?: string } })?.data?.message ??
+    (error as { message?: string })?.message ??
+    "Unknown error";
+
+  return (
+    <div className="flex items-center justify-between gap-4 rounded-lg border border-destructive/30 bg-destructive/5 p-4">
+      <div className="flex items-start gap-3">
+        <AlertCircle className="mt-0.5 h-5 w-5 shrink-0 text-destructive" />
+        <div>
+          <p className="font-semibold text-destructive">{title}</p>
+          <p className="mt-1 text-sm text-muted-foreground">{message}</p>
+        </div>
+      </div>
+      <Button variant="destructive" size="sm" onClick={onRetry}>
+        Retry
+      </Button>
+    </div>
   );
 }

@@ -21,6 +21,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { formatDistanceToNow } from "date-fns";
 import { TransactionDetailModal } from "./TransactionDetailModal";
 import type { TransactionRecord } from "@/pages/DepositHistory";
+import { FxAmountCell } from "./FxAmount";
 import { useState } from "react";
 
 interface TransactionsTableProps {
@@ -111,7 +112,7 @@ export function TransactionsTable({ transactions }: TransactionsTableProps) {
             <TableRow>
               <TableHead>Client</TableHead>
               <TableHead>Type</TableHead>
-              <TableHead>Amount</TableHead>
+              <TableHead>Amount (USD / INR @ rate)</TableHead>
               <TableHead>Payment Method</TableHead>
               <TableHead>Status</TableHead>
               <TableHead>Date</TableHead>
@@ -149,7 +150,14 @@ export function TransactionsTable({ transactions }: TransactionsTableProps) {
                 <TableCell>
                   {getTypeBadge(transaction.type, transaction.amount)}
                 </TableCell>
-                <TableCell>${transaction.amount}</TableCell>
+                <TableCell>
+                  <FxAmountCell
+                    usd={transaction.amount}
+                    inrAmount={transaction.inrAmount}
+                    fxRate={transaction.fxRate}
+                    direction={transaction.type === "deposit" ? "deposit" : "withdraw"}
+                  />
+                </TableCell>
                 <TableCell>
                   <Badge variant="outline" className="text-xs">
                     {transaction.paymentMethod}

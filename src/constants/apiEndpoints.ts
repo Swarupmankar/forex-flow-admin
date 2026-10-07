@@ -13,6 +13,10 @@ export const ENDPOINTS = {
 
   USER_TRANSACTIONS: "/broker/client/user-transactions",
   TRADING_ACCOUNTS: "/broker/client/trading-accounts",
+  // One trading account's trades: summary plus a page of orders.
+  TRADING_ACCOUNT_TRADES: "/broker/client/trading-account-trades",
+  // One client's IB picture: referred clients, commission by month, payouts.
+  CLIENT_IB_OVERVIEW: "/broker/client/ib-overview",
   CUSTOM_MESSAGE: "/broker/client/custom-message",
   CUSTOM_MESSAGE_HISTORY: "/broker/client/custom-message-history",
   ISACTIVE: "/broker/client/update-accounts",
@@ -44,6 +48,8 @@ export const ENDPOINTS = {
   TRANSACTIONS: {
     ALL_TRANSACTIONS: "/broker/user-management/get-transactions",
     UPDATE_TRANSACTION: "/broker/user-management/update-transactions",
+    // CoinsBuy deposits and withdrawals; ?userId= for one client.
+    CRYPTO: "/broker/client/crypto-transactions",
   },
 
   ADMIN_WALLET: {
@@ -56,6 +62,8 @@ export const ENDPOINTS = {
     CRYPTO_PROFIT: "/broker/admin-wallet/crypto-profit",
     CRYPTO_WITHDRAW_FEE: "/broker/admin-wallet/crypto-withdraw-fee",
     IB_MIN_WITHDRAW: "/broker/admin-wallet/ib-min-withdraw",
+    // Spread revenue, entered by hand from the admin wallet.
+    SPREAD_EARNED: "/broker/admin-wallet/spread-earned",
   },
 
   // The broker's bank / UPI receiving details, shown to clients on the
@@ -64,6 +72,10 @@ export const ENDPOINTS = {
     CURRENT: "/broker/pg-details",
     UPDATE: "/broker/pg-details/update",
     HISTORY: "/broker/pg-details/history",
+    // INR-per-USD rates for bank / UPI deposits and withdrawals.
+    FX_RATES: "/broker/pg-details/fx-rates",
+    // Each UPI ID / bank account, when it was live, and the deposits paid to it.
+    RECEIPTS: "/broker/pg-details/receipts",
   },
 
   IB_ADMIN: {

@@ -6,6 +6,7 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Copy, X } from "lucide-react";
+import { format, formatDistanceToNow } from "date-fns";
 import { toast } from "sonner";
 import { TradingAccount } from "@/features/users/users.types";
 
@@ -133,6 +134,20 @@ export function AccountDetailModal({
               </label>
               <p className="text-lg font-medium">{currency(freeMargin)}</p>
             </div>
+
+            <div>
+              <label className="text-sm text-muted-foreground">Created</label>
+              <p className="text-lg font-medium">
+                {account.createdAt
+                  ? format(new Date(account.createdAt), "dd MMM yyyy, HH:mm")
+                  : "—"}
+              </p>
+              {account.createdAt && (
+                <p className="text-xs text-muted-foreground">
+                  {formatDistanceToNow(new Date(account.createdAt), { addSuffix: true })}
+                </p>
+              )}
+            </div>
           </div>
 
           {/* Right Column */}
@@ -184,6 +199,13 @@ export function AccountDetailModal({
                 {currency(pnl)} ({pnl >= 0 ? "+" : ""}
                 {unrealizedPnLPercent.toFixed(2)}%)
               </p>
+            </div>
+
+            <div>
+              <label className="text-sm text-muted-foreground">
+                Base Currency
+              </label>
+              <p className="text-lg font-medium">{account.baseCurrency || "—"}</p>
             </div>
           </div>
         </div>

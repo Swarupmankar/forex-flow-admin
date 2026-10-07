@@ -10,7 +10,16 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { AccountDetailModal } from "./AccountDetailModal";
-import { TrendingUp, BarChart3, Shield, Eye, Server } from "lucide-react";
+import { AccountTradesDialog } from "./AccountTradesDialog";
+import {
+  TrendingUp,
+  BarChart3,
+  Shield,
+  Eye,
+  Server,
+  CandlestickChart,
+} from "lucide-react";
+import { format, formatDistanceToNow } from "date-fns";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -50,6 +59,7 @@ export function AccountsSection({
     null
   );
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [tradesAccount, setTradesAccount] = useState<TradingAccount | null>(null);
 
   const [statusDialogOpen, setStatusDialogOpen] = useState(false);
   const [accountForStatusChange, setAccountForStatusChange] =
@@ -122,7 +132,7 @@ export function AccountsSection({
 
       // success toast
       toast({
-        title: `Account ${account.id} updated`,
+        title: `Account #${account.tradingUsername || account.id} updated`,
         description: `Account status set to ${newStatus}.`,
       });
     } catch (err: any) {
@@ -214,11 +224,12 @@ export function AccountsSection({
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Account ID</TableHead>
+                <TableHead>Account No.</TableHead>
                 <TableHead>Type</TableHead>
                 <TableHead>Account Type</TableHead>
                 <TableHead>Leverage</TableHead>
                 <TableHead>Balance</TableHead>
+                <TableHead>Created</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead className="text-right">Actions</TableHead>
               </TableRow>
@@ -231,7 +242,16 @@ export function AccountsSection({
 
                 return (
                   <TableRow key={account.id} className="hover:bg-muted/50">
-                    <TableCell className="font-medium">{account.id}</TableCell>
+                    <TableCell>
+                      <span className="font-mono font-semibold">
+                        #{account.tradingUsername || account.id}
+                      </span>
+                      {account.nickname && (
+                        <p className="text-xs text-muted-foreground">
+                          {account.nickname}
+                        </p>
+                      )}
+                    </TableCell>
                     <TableCell>
                       <div className="flex items-center gap-2">
                         {account.accountTypes?.name ?? account.accountType}
@@ -267,6 +287,22 @@ export function AccountsSection({
                     <TableCell className="font-medium">
                       {currency(balance)}
                     </TableCell>
+                    <TableCell className="whitespace-nowrap">
+                      {account.createdAt ? (
+                        <>
+                          <p className="text-sm">
+                            {format(new Date(account.createdAt), "dd MMM yyyy, HH:mm")}
+                          </p>
+                          <p className="text-xs text-muted-foreground">
+                            {formatDistanceToNow(new Date(account.createdAt), {
+                              addSuffix: true,
+                            })}
+                          </p>
+                        </>
+                      ) : (
+                        "—"
+                      )}
+                    </TableCell>
                     <TableCell>
                       <Badge
                         variant={
@@ -283,9 +319,20 @@ export function AccountsSection({
                       <div className="flex gap-1 justify-end">
                         <Button
                           size="sm"
+                          variant="outline"
+                          className="h-8 gap-1 px-2 text-xs"
+                          onClick={() => setTradesAccount(account)}
+                          title="View trades"
+                        >
+                          <CandlestickChart className="h-4 w-4" />
+                          Trades
+                        </Button>
+                        <Button
+                          size="sm"
                           variant="ghost"
                           className="h-8 w-8 p-0"
                           onClick={() => handleViewDetails(account)}
+                          title="Account details"
                         >
                           <Eye className="h-4 w-4" />
                         </Button>
@@ -326,8 +373,8 @@ export function AccountsSection({
               {accountForStatusChange ? (
                 <>
                   {accountForStatusChange.accountStatus === "ACTIVE"
-                    ? `Disabling account ${accountForStatusChange.id} will set its status to ARCHIVE and may block trading and access until re-enabled.`
-                    : `Enabling account ${accountForStatusChange.id} will set its status to ACTIVE and restore access.`}
+                    ? `Disabling account #${accountForStatusChange.tradingUsername || accountForStatusChange.id} will set its status to ARCHIVE and may block trading and access until re-enabled.`
+                    : `Enabling account #${accountForStatusChange.tradingUsername || accountForStatusChange.id} will set its status to ACTIVE and restore access.`}
                 </>
               ) : (
                 "Change account status."
@@ -362,6 +409,12 @@ export function AccountsSection({
         account={selectedAccount}
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
+      />
+
+      <AccountTradesDialog
+        account={tradesAccount}
+        isOpen={tradesAccount !== null}
+        onClose={() => setTradesAccount(null)}
       />
     </div>
   );

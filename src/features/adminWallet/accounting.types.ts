@@ -5,6 +5,10 @@ export type AccountingResponseRaw = {
   netProfit: string;
   lossesSaved: string;
   brokerFeesEarned: string;
+  /** IB commission already credited to IB wallets (ledger state PAID). */
+  ibPayouts?: string;
+  /** Completed CoinsBuy payouts from IB commission wallets. */
+  ibWithdrawals?: string;
 };
 
 /** Normalized/typed model used within the app (numbers) */
@@ -14,6 +18,8 @@ export type AccountingDetails = {
   netProfit: number;
   lossesSaved: number;
   brokerFeesEarned: number;
+  ibPayouts: number;
+  ibWithdrawals: number;
 };
 
 export type WalletBalancesResponseRaw = {

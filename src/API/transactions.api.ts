@@ -1,5 +1,8 @@
 import { baseApi } from "./baseApi";
-import type { Transaction } from "@/features/transactions/transactions.types";
+import type {
+  CryptoTransaction,
+  Transaction,
+} from "@/features/transactions/transactions.types";
 import { ENDPOINTS } from "@/constants/apiEndpoints";
 
 type UpdateTransactionResponse = {
@@ -69,6 +72,17 @@ export const transactionsApi = baseApi.injectEndpoints({
         { type: "Transactions" as const, id: "LIST" },
       ],
     }),
+    getCryptoTransactions: build.query<
+      CryptoTransaction[],
+      { userId?: number | string; action?: "DEPOSIT" | "WITHDRAW" } | void
+    >({
+      query: (args) => ({
+        url: ENDPOINTS.TRANSACTIONS.CRYPTO,
+        method: "GET",
+        params: args ?? undefined,
+      }),
+      providesTags: [{ type: "Transactions" as const, id: "CRYPTO" }],
+    }),
   }),
 
   overrideExisting: false,
@@ -78,6 +92,7 @@ export const {
   useGetTransactionsQuery,
   useApproveTransactionMutation,
   useRejectTransactionMutation,
+  useGetCryptoTransactionsQuery,
 } = transactionsApi;
 
 export default transactionsApi;

@@ -41,6 +41,8 @@ export const accountingApi = baseApi.injectEndpoints({
           netProfit: toNumber(res.netProfit),
           lossesSaved: toNumber(res.lossesSaved),
           brokerFeesEarned: toNumber(res.brokerFeesEarned),
+          ibPayouts: toNumber(res.ibPayouts),
+          ibWithdrawals: toNumber(res.ibWithdrawals),
         };
       },
       providesTags: (_res) => [{ type: "Accounting" as const, id: "LIST" }],
@@ -134,6 +136,23 @@ export const accountingApi = baseApi.injectEndpoints({
             ]
           : [{ type: "Accounting" as const, id: "LIST" }],
     }),
+
+    // Entered by the admin, not computed: nothing records the spread a client paid.
+    getSpreadEarned: build.query<{ spreadEarned: number }, void>({
+      query: () => ({
+        url: ENDPOINTS.ADMIN_WALLET.SPREAD_EARNED,
+        method: "GET",
+      }),
+      providesTags: [{ type: "Accounting", id: "SPREAD" }],
+    }),
+    setSpreadEarned: build.mutation<{ spreadEarned: number }, number>({
+      query: (spreadEarned) => ({
+        url: ENDPOINTS.ADMIN_WALLET.SPREAD_EARNED,
+        method: "POST",
+        data: { spreadEarned },
+      }),
+      invalidatesTags: [{ type: "Accounting", id: "SPREAD" }],
+    }),
   }),
   overrideExisting: false,
 });
@@ -144,4 +163,6 @@ export const {
   useWithdrawBalancesMutation,
   useReplenishBalancesMutation,
   useGetWithdrawHistoryQuery,
+  useGetSpreadEarnedQuery,
+  useSetSpreadEarnedMutation,
 } = accountingApi;

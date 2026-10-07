@@ -31,14 +31,15 @@ export function exportDepositRequests(requests: DepositRequest[], format: "csv" 
 
 // Withdrawals Export
 export function exportWithdrawals(withdrawals: WithdrawalRequest[], format: "csv" | "pdf") {
-  const headers = ["Client Name", "Email", "Amount", "Currency", "Type", "Balance", "Destination", "Date", "Status"];
+  const headers = ["Client Name", "Email", "Amount (USD)", "Amount (INR)", "Rate (INR per USD)", "Type", "Balance", "Destination", "Date", "Status"];
   const rows = withdrawals.map(withdrawal => [
     withdrawal.clientName,
     withdrawal.email,
-    formatCurrencyForExport(withdrawal.amount, withdrawal.currency),
-    withdrawal.currency,
+    formatCurrencyForExport(withdrawal.amount, "USD"),
+    withdrawal.inrAmount != null ? formatCurrencyForExport(withdrawal.inrAmount, "INR") : "",
+    withdrawal.fxRate ?? "",
     withdrawal.type.charAt(0).toUpperCase() + withdrawal.type.slice(1),
-    formatCurrencyForExport(withdrawal.clientBalance, withdrawal.currency),
+    formatCurrencyForExport(withdrawal.clientBalance ?? 0, "USD"),
     withdrawal.destination,
     formatDateForExport(withdrawal.submissionDate),
     formatStatusForExport(withdrawal.status)

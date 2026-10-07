@@ -27,6 +27,7 @@ import { formatDistanceToNow } from "date-fns";
 import type { Transaction } from "@/features/transactions/transactions.types";
 import type { TransactionRecord } from "@/pages/DepositHistory";
 import { useState } from "react";
+import { FxBreakdown, toNum } from "./FxAmount";
 
 interface TransactionDetailModalProps {
   transaction: Transaction | TransactionRecord | null;
@@ -73,6 +74,9 @@ export function TransactionDetailModal({
     (transaction as Transaction).amount ??
     (transaction as any).amount ??
     "0.00";
+
+  const inrAmount = toNum((transaction as { inrAmount?: unknown }).inrAmount);
+  const fxRate = toNum((transaction as { fxRate?: unknown }).fxRate);
 
   const depositProof =
     (transaction as Transaction).depositProof ??
@@ -249,6 +253,15 @@ export function TransactionDetailModal({
                 <span className="text-sm text-muted-foreground">Amount:</span>
                 <div className="text-lg font-semibold">${amount}</div>
               </div>
+
+              {inrAmount != null && (
+                <FxBreakdown
+                  usd={Math.abs(Number(amount))}
+                  inrAmount={inrAmount}
+                  fxRate={fxRate}
+                  direction={normalizedType === "DEPOSIT" ? "deposit" : "withdraw"}
+                />
+              )}
 
               <div className="flex justify-between items-center">
                 <span className="text-sm text-muted-foreground">Status:</span>

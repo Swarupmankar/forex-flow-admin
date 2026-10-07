@@ -5,24 +5,22 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { ClientHeader } from "@/components/client-profile/ClientHeader";
 import { ClientSummary } from "@/components/client-profile/ClientSummary";
-import { KycDocumentsNew } from "@/components/client-profile/KycDocumentsNew";
 import { AccountsSection } from "@/components/client-profile/AccountsSection";
 import { DepositsWithdrawals } from "@/components/client-profile/DepositsWithdrawals";
 import { CustomMessage } from "@/components/client-profile/CustomMessage";
+import { IbSection } from "@/components/client-profile/IbSection";
+import { toNum } from "@/components/transactions/FxAmount";
 import {
   useGetUserByIdQuery,
   useGetTradingAccountsQuery,
   useGetUserTransactionsQuery,
 } from "@/API/users.api";
-import { useGetKycByUserIdQuery } from "@/API/kyc.api";
 import type {
-  KycStatus,
   UserDetails,
   TradingAccount,
   Transaction,
   Client,
 } from "@/features/users/users.types";
-import type { KycRecord } from "@/features/kyc/kyc.types";
 
 type ClientProfileModel = {
   id: number;
@@ -40,43 +38,13 @@ type ClientProfileModel = {
   totalDeposits: number;
   totalWithdrawals: number;
   profit: string;
+  totalCommission: number | null;
+  totalLots: number | null;
+  ibClients: number | null;
+  ibTier: string | null;
   accounts: TradingAccount[];
 };
 
-type DocStatus = "approved" | "pending" | "rejected";
-type KycDocumentsUi = {
-  idDocument?: {
-    id: number;
-    type: string;
-    front?: string | null;
-    back?: string | null;
-    frontStatus: DocStatus;
-    backStatus: DocStatus;
-    frontApprovedAt?: string | null;
-    frontApprovedBy?: string | null;
-    frontRejectionReason?: string | null;
-    backApprovedAt?: string | null;
-    backApprovedBy?: string | null;
-    backRejectionReason?: string | null;
-  };
-  selfieProof?: {
-    type: string;
-    document?: string | null;
-    status: DocStatus;
-    approvedAt?: string | null;
-    approvedBy?: string | null;
-    rejectionReason?: string | null;
-  };
-  proofOfAddress?: {
-    type: string;
-    document?: string | null;
-    status: DocStatus;
-    approvedAt?: string | null;
-    approvedBy?: string | null;
-    rejectionReason?: string | null;
-    kycId: number | string;
-  };
-};
 
 function mapKycStatusLower(s: string): ClientProfileModel["kycStatus"] {
   const M: Record<string, ClientProfileModel["kycStatus"]> = {
@@ -103,54 +71,14 @@ function toClientProfileModel(u: UserDetails): ClientProfileModel {
     totalDeposits: u.totalDeposits,
     totalWithdrawals: u.totalWithdrawals,
     profit: u.netProfit,
+    totalCommission: u.totalCommission,
+    totalLots: u.totalLots,
+    ibClients: u.ibClients,
+    ibTier: u.ibTier,
     accounts: [],
   };
 }
 
-function mapStatusToUi(status: KycStatus): "approved" | "pending" | "rejected" {
-  switch (status) {
-    case "APPROVED":
-      return "approved";
-    case "REJECTED":
-      return "rejected";
-    default:
-      return "pending";
-  }
-}
-function mapKycToDocuments(kyc: KycRecord): KycDocumentsUi {
-  return {
-    idDocument:
-      kyc.passportFront || kyc.passportBack
-        ? {
-            id: kyc.id,
-            type: "passport",
-            front: kyc.passportFront,
-            back: kyc.passportBack,
-            frontStatus: mapStatusToUi(kyc.passportFrontStatus),
-            backStatus: mapStatusToUi(kyc.passportBackStatus),
-            frontRejectionReason: kyc.passportFrontRejectionReason,
-            backRejectionReason: kyc.passportBackRejectionReason,
-          }
-        : undefined,
-    selfieProof: kyc.selfieWithId
-      ? {
-          type: "selfieWithId",
-          document: kyc.selfieWithId,
-          status: mapStatusToUi(kyc.selfieWithIdStatus),
-          rejectionReason: kyc.selfieWithIdRejectionReason,
-        }
-      : undefined,
-    proofOfAddress: kyc.utilityBill
-      ? {
-          type: "utilityBill",
-          document: kyc.utilityBill,
-          status: mapStatusToUi(kyc.utilityBillStatus),
-          rejectionReason: kyc.utilityBillRejectionReason,
-          kycId: kyc.id,
-        }
-      : undefined,
-  };
-}
 
 function mapTradingAccountToClientAccount(acc: TradingAccount) {
   return {
@@ -174,6 +102,8 @@ function mapTransactionToClientTx(t: Transaction) {
       | "deposit"
       | "withdrawal",
     amount: Number(t.amount),
+    inrAmount: toNum(t.inrAmount),
+    fxRate: toNum(t.fxRate),
     date: t.createdAt,
     method: (t.mode ?? "").toLowerCase(),
     status:
@@ -204,9 +134,6 @@ export default function ClientProfile() {
   const { data: transactions, isLoading: txLoading } =
     useGetUserTransactionsQuery(id!, { skip: !id });
 
-  const { data: kyc, isLoading: kycLoading } = useGetKycByUserIdQuery(id!, {
-    skip: !id,
-  });
 
   const client = useMemo(() => {
     if (!data) return null;
@@ -223,10 +150,6 @@ export default function ClientProfile() {
     };
   }, [data, tradingAccounts, transactions]);
 
-  const kycDocuments = useMemo<KycDocumentsUi | undefined>(
-    () => (kyc ? mapKycToDocuments(kyc) : undefined),
-    [kyc]
-  );
 
   useEffect(() => {
     const title = client ? `${client.name} – Client Profile` : "Client Profile";
@@ -236,22 +159,12 @@ export default function ClientProfile() {
     if (metaDesc)
       metaDesc.setAttribute(
         "content",
-        `Profile, KYC, accounts and activity details for ${
+        `Profile, accounts and activity details for ${
           client?.name ?? "client"
         }.`
       );
   }, [client]);
 
-  const docCount = useMemo(() => {
-    const d = kycDocuments;
-    if (!d) return 0;
-    let count = 0;
-    if (d.idDocument?.front) count += 1;
-    if (d.idDocument?.back) count += 1;
-    if (d.selfieProof?.document) count += 1;
-    if (d.proofOfAddress?.document) count += 1;
-    return count;
-  }, [kycDocuments]);
 
   if (!id) {
     return (
@@ -314,14 +227,10 @@ export default function ClientProfile() {
         <ClientSummary client={client} />
 
         <section>
-          <Tabs defaultValue="kyc" className="w-full">
+          {/* No KYC documents tab: verification runs on Sumsub. The KYC status
+              in the header above comes from there and stays. */}
+          <Tabs defaultValue="accounts" className="w-full">
             <TabsList className="sticky top-0 z-20 bg-background/95 backdrop-blur border rounded-lg p-1 grid grid-cols-4 shadow-sm">
-              <TabsTrigger
-                value="kyc"
-                className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
-              >
-                KYC Documents {docCount ? `(${docCount})` : ""}
-              </TabsTrigger>
               <TabsTrigger
                 value="accounts"
                 className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
@@ -335,6 +244,12 @@ export default function ClientProfile() {
                 Deposits & Withdrawals
               </TabsTrigger>
               <TabsTrigger
+                value="ib"
+                className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
+              >
+                Referrals
+              </TabsTrigger>
+              <TabsTrigger
                 value="messages"
                 className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
               >
@@ -342,15 +257,6 @@ export default function ClientProfile() {
               </TabsTrigger>
             </TabsList>
 
-            <TabsContent value="kyc" className="mt-6 animate-fade-in">
-              <KycDocumentsNew
-                client={client}
-                kycDocuments={kycDocuments}
-                loading={kycLoading}
-                address={kyc?.address ?? null}
-                kycId={kyc?.id}
-              />
-            </TabsContent>
 
             <TabsContent value="accounts" className="mt-6 animate-fade-in">
               <AccountsSection
@@ -365,13 +271,14 @@ export default function ClientProfile() {
             <TabsContent value="transactions" className="mt-6 animate-fade-in">
               <DepositsWithdrawals
                 client={client}
-                transactions={(transactions?.transactions ?? []).map(
-                  mapTransactionToClientTx
-                )}
-                totalDeposit={transactions?.totalDepositAmount ?? "0"}
-                totalWithdraw={transactions?.totalWithdrawAmount ?? "0"}
+                rawTransactions={transactions?.transactions ?? []}
                 loading={txLoading}
+                clientId={id}
               />
+            </TabsContent>
+
+            <TabsContent value="ib" className="mt-6 animate-fade-in">
+              {id && <IbSection clientId={id} />}
             </TabsContent>
 
             <TabsContent value="messages" className="mt-6 animate-fade-in">

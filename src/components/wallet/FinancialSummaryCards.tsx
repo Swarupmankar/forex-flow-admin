@@ -1,12 +1,10 @@
-import React from "react";
 import {
-  TrendingUp,
+  ArrowDownToLine,
+  ArrowUpFromLine,
+  Network,
   TrendingDown,
-  DollarSign,
-  PiggyBank,
-  TrendingUpIcon,
-  Receipt,
-  Shield,
+  TrendingUp,
+  type LucideIcon,
 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 
@@ -15,91 +13,90 @@ interface FinancialSummaryCardsProps {
     totalDeposits: number;
     totalWithdrawals: number;
     netProfit: number;
-    brokerFeesEarned: number;
-    lossesSaved: number;
+    ibPayouts: number;
   };
 }
 
-export function FinancialSummaryCards({ data }: FinancialSummaryCardsProps) {
-  const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat("en-US", {
-      style: "currency",
-      currency: "USD",
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 0,
-    }).format(amount);
-  };
+const formatCurrency = (amount: number) =>
+  new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: "USD",
+    maximumFractionDigits: 0,
+  }).format(amount);
 
-  const cards = [
+type SummaryCard = {
+  title: string;
+  amount: number;
+  hint: string;
+  icon: LucideIcon;
+  accent: string;
+  iconBg: string;
+  amountClass?: string;
+};
+
+export function FinancialSummaryCards({ data }: FinancialSummaryCardsProps) {
+  const isLoss = data.netProfit < 0;
+
+  const cards: SummaryCard[] = [
     {
       title: "Total Deposits",
       amount: data.totalDeposits,
-
-      icon: DollarSign,
-      bgColor: "bg-blue-50",
-      iconColor: "text-blue-600",
+      hint: "Approved client deposits",
+      icon: ArrowDownToLine,
+      accent: "bg-blue-500",
+      iconBg: "bg-blue-100 text-blue-600",
     },
     {
       title: "Total Withdrawals",
       amount: data.totalWithdrawals,
-
-      icon: PiggyBank,
-      bgColor: "bg-purple-50",
-      iconColor: "text-purple-600",
+      hint: "Approved client withdrawals",
+      icon: ArrowUpFromLine,
+      accent: "bg-purple-500",
+      iconBg: "bg-purple-100 text-purple-600",
     },
     {
       title: "Net Profit",
       amount: data.netProfit,
-
-      icon: TrendingUpIcon,
-      bgColor: "bg-green-50",
-      iconColor: "text-green-600",
+      hint: "Deposits − withdrawals + commission − referral payouts",
+      icon: isLoss ? TrendingDown : TrendingUp,
+      accent: isLoss ? "bg-red-500" : "bg-emerald-500",
+      iconBg: isLoss ? "bg-red-100 text-red-600" : "bg-emerald-100 text-emerald-600",
+      amountClass: isLoss ? "text-destructive" : "text-emerald-600",
     },
     {
-      title: "Broker Fees Earned",
-      amount: data.brokerFeesEarned,
-
-      icon: Receipt,
-      bgColor: "bg-orange-50",
-      iconColor: "text-orange-600",
-    },
-    {
-      title: "Losses Saved",
-      amount: data.lossesSaved,
-      change: 0,
-      icon: Shield,
-      bgColor: "bg-emerald-50",
-      iconColor: "text-emerald-600",
+      title: "IB Payouts",
+      amount: data.ibPayouts,
+      hint: "Commission credited to IB wallets",
+      icon: Network,
+      accent: "bg-amber-500",
+      iconBg: "bg-amber-100 text-amber-600",
     },
   ];
 
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-      {cards.map((card, index) => {
-        const Icon = card.icon;
-        return (
-          <Card
-            key={index}
-            className="hover:shadow-lg transition-shadow duration-200"
-          >
-            <CardContent className="p-6">
-              <div className="flex items-center justify-between">
-                <div className="flex-1">
-                  <p className="text-sm text-muted-foreground mb-2">
-                    {card.title}
-                  </p>
-                  <p className="text-2xl font-bold text-foreground">
-                    {formatCurrency(card.amount)}
-                  </p>
-                </div>
-                <div className={`p-3 rounded-lg ${card.bgColor}`}>
-                  <Icon className={`h-6 w-6 ${card.iconColor}`} />
-                </div>
+    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      {cards.map((card) => (
+        <Card
+          key={card.title}
+          className="relative overflow-hidden transition-shadow duration-200 hover:shadow-md"
+        >
+          <div className={`absolute inset-x-0 top-0 h-1 ${card.accent}`} />
+          <CardContent className="space-y-4 p-5">
+            <div className="flex items-center justify-between">
+              <p className="text-sm font-medium text-muted-foreground">{card.title}</p>
+              <div className={`rounded-lg p-2 ${card.iconBg}`}>
+                <card.icon className="h-4 w-4" />
               </div>
-            </CardContent>
-          </Card>
-        );
-      })}
+            </div>
+            <div>
+              <p className={`text-2xl font-bold tracking-tight ${card.amountClass ?? "text-foreground"}`}>
+                {formatCurrency(card.amount)}
+              </p>
+              <p className="mt-1 text-xs text-muted-foreground">{card.hint}</p>
+            </div>
+          </CardContent>
+        </Card>
+      ))}
     </div>
   );
 }

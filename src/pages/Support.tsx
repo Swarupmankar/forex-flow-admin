@@ -6,6 +6,23 @@ import { SupportTicketDetail } from "@/components/support/SupportTicketDetail";
 import { useGetTicketByIdQuery, useGetTicketsQuery } from "@/API/support.api";
 import { SupportTicket } from "@/features/support/support.types";
 import { useSupportSocket } from "@/hooks/useSupportSocket";
+import { cn } from "@/lib/utils";
+import {
+  CheckCircle2,
+  Inbox,
+  Loader,
+  MessageCircleWarning,
+  MessagesSquare,
+  CircleDot,
+} from "lucide-react";
+
+const STATUS_CARDS = [
+  { key: "all", label: "All tickets", icon: Inbox, tone: "bg-primary/10 text-primary" },
+  { key: "open", label: "Open", icon: CircleDot, tone: "bg-emerald-100 text-emerald-600" },
+  { key: "awaiting_reply", label: "Awaiting reply", icon: MessageCircleWarning, tone: "bg-amber-100 text-amber-600" },
+  { key: "in_progress", label: "In progress", icon: Loader, tone: "bg-blue-100 text-blue-600" },
+  { key: "resolved", label: "Resolved", icon: CheckCircle2, tone: "bg-purple-100 text-purple-600" },
+] as const;
 
 export default function Support() {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -32,9 +49,23 @@ export default function Support() {
     status: statusFilter !== "all" ? statusFilter.toUpperCase() : undefined,
   });
 
+  // Unfiltered, for the status counts. Same cache entry as the list when the
+  // filter is "all".
+  const { data: allData, refetch: refetchAll } = useGetTicketsQuery({});
+
   const { data: ticketDetail, refetch: refetchTicketDetail } = useGetTicketByIdQuery(selectedTicketId!, {
     skip: !selectedTicketId,
   });
+
+  const counts = useMemo(() => {
+    const c = { all: 0, open: 0, awaiting_reply: 0, in_progress: 0, resolved: 0 };
+    for (const t of allData?.tickets ?? []) {
+      c.all += 1;
+      const s = (t.status ?? "OPEN").toLowerCase() as keyof typeof c;
+      if (s in c) c[s] += 1;
+    }
+    return c;
+  }, [allData]);
 
   // ✅ Real-time Support WebSocket
   useSupportSocket({
@@ -42,15 +73,18 @@ export default function Support() {
     ticketId: selectedTicketId ?? undefined,
     onNewReply: useCallback(() => {
       refetchTickets();
+      refetchAll();
       if (selectedTicketId) refetchTicketDetail();
-    }, [refetchTickets, refetchTicketDetail, selectedTicketId]),
+    }, [refetchTickets, refetchAll, refetchTicketDetail, selectedTicketId]),
     onNewTicket: useCallback(() => {
       refetchTickets();
-    }, [refetchTickets]),
+      refetchAll();
+    }, [refetchTickets, refetchAll]),
     onStatusChange: useCallback(() => {
       refetchTickets();
+      refetchAll();
       if (selectedTicketId) refetchTicketDetail();
-    }, [refetchTickets, refetchTicketDetail, selectedTicketId]),
+    }, [refetchTickets, refetchAll, refetchTicketDetail, selectedTicketId]),
   });
 
   const tickets = data?.tickets ?? [];
@@ -108,7 +142,6 @@ export default function Support() {
     });
   }, [mappedTickets, searchQuery, statusFilter, clientFilter]);
 
-  console.log("[Support] Fetching ticket detail with id:", selectedTicketId);
 
   const selectedTicket: SupportTicket | null = useMemo(() => {
     if (!ticketDetail) return null;
@@ -144,16 +177,43 @@ export default function Support() {
         createdAt: new Date(r.createdAt),
       })),
     };
-    if (mapped.status === "open") {
-      console.log("[Support] Selected OPEN ticket:", mapped);
-    }
 
     return mapped;
   }, [ticketDetail]);
 
   return (
     <DashboardLayout title="Support Center">
-      <div className="h-[calc(100vh-7rem)] flex gap-5 overflow-hidden">
+      <div className="flex h-[calc(100vh-7rem)] flex-col gap-3 overflow-hidden">
+        {/* Status counts, each a filter */}
+        <div className="grid shrink-0 grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+          {STATUS_CARDS.map((card) => {
+            const active = statusFilter === card.key;
+            return (
+              <button
+                key={card.key}
+                type="button"
+                aria-pressed={active}
+                onClick={() => setStatusFilter(card.key)}
+                className={cn(
+                  "flex items-center gap-2.5 rounded-lg border bg-card px-3 py-2 text-left transition-all hover:shadow-sm",
+                  active && "border-primary/50 ring-1 ring-primary/30"
+                )}
+              >
+                <div className={cn("rounded-md p-1.5", card.tone)}>
+                  <card.icon className="h-3.5 w-3.5" />
+                </div>
+                <div>
+                  <p className="text-base font-bold leading-none text-foreground">
+                    {counts[card.key as keyof typeof counts]}
+                  </p>
+                  <p className="mt-0.5 text-[11px] text-muted-foreground">{card.label}</p>
+                </div>
+              </button>
+            );
+          })}
+        </div>
+
+      <div className="flex min-h-0 flex-1 gap-5 overflow-hidden">
         {/* Left Side: Fixed Support Tickets Sidebar */}
         <div className="w-[320px] sm:w-[360px] lg:w-[380px] shrink-0 h-full flex flex-col">
           <SupportTicketList
@@ -183,11 +243,21 @@ export default function Support() {
           ) : selectedTicket ? (
             <SupportTicketDetail ticket={selectedTicket} />
           ) : (
-            <div className="h-full flex items-center justify-center text-muted-foreground rounded-xl border bg-card">
-              Select a ticket to view details
+            <div className="flex h-full flex-col items-center justify-center gap-3 rounded-xl border bg-card text-center">
+              <div className="flex h-14 w-14 items-center justify-center rounded-full bg-primary/10">
+                <MessagesSquare className="h-6 w-6 text-primary" />
+              </div>
+              <div>
+                <p className="font-semibold text-foreground">Select a ticket</p>
+                <p className="mt-1 max-w-xs text-sm text-muted-foreground">
+                  Pick a conversation from the list. Quick-reply templates for its
+                  category will be ready in the reply box.
+                </p>
+              </div>
             </div>
           )}
         </div>
+      </div>
       </div>
     </DashboardLayout>
   );

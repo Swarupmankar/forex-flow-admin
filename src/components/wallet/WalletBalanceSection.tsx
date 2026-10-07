@@ -80,7 +80,7 @@ export function WalletBalanceSection({
                 <p className="text-3xl font-bold text-foreground">
                   {formatCurrency(balances.principal)}
                 </p>
-                {replenishAmount && replenishAmount > 0 && (
+                {(replenishAmount ?? 0) > 0 && (
                   <p className="text-sm text-orange-600 mt-1">
                     Replenish Amount: {formatCurrency(replenishAmount)}
                   </p>

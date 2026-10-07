@@ -17,13 +17,25 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useToast } from "@/components/ui/use-toast";
-import { AlertCircle, Building2, CheckCircle2, History, Loader2, QrCode, RotateCcw, Trash2 } from "lucide-react";
+import {
+  AlertCircle,
+  ArrowDownToLine,
+  ArrowLeftRight,
+  ArrowUpFromLine,
+  Building2,
+  CheckCircle2,
+  Loader2,
+  QrCode,
+  RotateCcw,
+  Trash2,
+} from "lucide-react";
 import { DashboardLayout } from "@/components/DashboardLayout";
+import { CurrentReceipts, PaymentHistoryView } from "@/components/payment-setup/MethodReceipts";
 import {
   apiErrorMessage,
-  useGetPaymentDetailsHistoryQuery,
+  useGetFiatRatesQuery,
+  useSetFiatRatesMutation,
   useGetPaymentDetailsQuery,
   useUpdatePaymentDetailsMutation,
   type BankDetailsPayload,
@@ -362,60 +374,185 @@ function BankCard({ details }: { details: PaymentDetails }) {
   );
 }
 
-/* ── History ── */
-function ChangeHistory() {
-  const { data, isLoading, isError, error, refetch, isFetching } = useGetPaymentDetailsHistoryQuery();
-  if (isLoading) return <Skeleton className="h-40 w-full" />;
+
+/* ── Exchange rates ── */
+const RATE_MIN = 1;
+const RATE_MAX = 1000;
+
+const rateError = (v: string, label: string) => {
+  if (!v.trim()) return `Enter the ${label} rate.`;
+  const n = Number(v);
+  if (!Number.isFinite(n) || n < RATE_MIN || n > RATE_MAX) return `Enter a rate between ${RATE_MIN} and ${RATE_MAX}.`;
+  return "";
+};
+
+const inr = (n: number) => n.toLocaleString("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 2 });
+const usd = (n: number) => n.toLocaleString("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 2 });
+// Same rounding as the server: always down, so the preview never promises more.
+const floor2 = (n: number) => Math.floor(n * 100 + 1e-9) / 100;
+
+function FxRatesCard() {
+  const { toast } = useToast();
+  const { data, isLoading, isError, error, refetch } = useGetFiatRatesQuery();
+  const [save, { isLoading: saving }] = useSetFiatRatesMutation();
+
+  const savedDeposit = data?.depositRate != null ? String(data.depositRate) : "";
+  const savedWithdraw = data?.withdrawRate != null ? String(data.withdrawRate) : "";
+  const [deposit, setDeposit] = useState(savedDeposit);
+  const [withdraw, setWithdraw] = useState(savedWithdraw);
+  const [attempted, setAttempted] = useState(false);
+
+  // Seed from the server; typing is never overwritten by a refetch.
+  useEffect(() => {
+    setDeposit(savedDeposit);
+    setWithdraw(savedWithdraw);
+  }, [savedDeposit, savedWithdraw]);
+
+  const depositErr = deposit || attempted ? rateError(deposit, "deposit") : "";
+  const withdrawErr = withdraw || attempted ? rateError(withdraw, "withdrawal") : "";
+  const dirty = deposit.trim() !== savedDeposit || withdraw.trim() !== savedWithdraw;
+  const live = data?.depositRate != null && data?.withdrawRate != null;
+
+  const d = Number(deposit);
+  const w = Number(withdraw);
+  const validD = !rateError(deposit, "deposit");
+  const validW = !rateError(withdraw, "withdrawal");
+
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setAttempted(true);
+    if (!validD || !validW || saving) return;
+    try {
+      await save({ depositRate: d, withdrawRate: w }).unwrap();
+      setAttempted(false);
+      toast({ title: "Exchange rates saved", description: "New bank / UPI deposits and withdrawals use these rates." });
+    } catch (err) {
+      toast({ variant: "destructive", title: "Couldn't save the rates", description: apiErrorMessage(err, "Please try again.") });
+    }
+  };
+
+  if (isLoading) return <Skeleton className="h-56 w-full" />;
   if (isError) {
     return (
       <Alert variant="destructive">
         <AlertCircle className="h-4 w-4" />
-        <AlertTitle>Couldn't load the change history</AlertTitle>
+        <AlertTitle>Couldn't load exchange rates</AlertTitle>
         <AlertDescription className="flex flex-wrap items-center gap-3">
           {apiErrorMessage(error, "Please try again.")}
-          <Button size="sm" variant="outline" onClick={() => refetch()} disabled={isFetching}>{isFetching ? "Retrying…" : "Try again"}</Button>
+          <Button size="sm" variant="outline" onClick={() => refetch()}>Try again</Button>
         </AlertDescription>
       </Alert>
     );
   }
-  const rows = data ?? [];
+
   return (
     <Card>
-      <CardHeader>
-        <CardTitle className="text-lg flex items-center gap-2"><History className="h-5 w-5" />Change history</CardTitle>
-        <CardDescription>Each row is the set of details that was replaced, and when.</CardDescription>
+      <CardHeader className="flex flex-row items-start justify-between gap-4 space-y-0">
+        <div className="flex items-center gap-3">
+          <div className="p-2 rounded-lg bg-muted/50"><ArrowLeftRight className="h-5 w-5" /></div>
+          <div>
+            <CardTitle className="text-lg">Exchange rates (INR per 1 USD)</CardTitle>
+            <CardDescription>
+              Bank / UPI money is converted at these rates. Clients see them on the deposit and withdraw screens.
+            </CardDescription>
+          </div>
+        </div>
+        <StatusBadge live={live} />
       </CardHeader>
       <CardContent>
-        {rows.length === 0 ? (
-          <p className="text-sm text-muted-foreground py-6 text-center">No changes yet.</p>
-        ) : (
-          <div className="overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Replaced on</TableHead>
-                  <TableHead>UPI ID</TableHead>
-                  <TableHead>Account holder</TableHead>
-                  <TableHead>Bank</TableHead>
-                  <TableHead>Account no.</TableHead>
-                  <TableHead>IFSC</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {rows.map((r) => (
-                  <TableRow key={r.id}>
-                    <TableCell className="whitespace-nowrap">{formatDate(r.createdAt)}</TableCell>
-                    <TableCell className="font-mono text-xs">{r.upiId || "—"}</TableCell>
-                    <TableCell>{r.accountHolderName || "—"}</TableCell>
-                    <TableCell>{r.bankName || "—"}</TableCell>
-                    <TableCell className="font-mono text-xs">{maskAccount(r.bankAccountNo)}</TableCell>
-                    <TableCell className="font-mono text-xs">{r.bankIfscCode || "—"}</TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </div>
+        {!live && (
+          <Alert className="mb-4">
+            <AlertCircle className="h-4 w-4" />
+            <AlertTitle>Bank / UPI deposits and withdrawals are paused</AlertTitle>
+            <AlertDescription>Set both rates below to turn them on.</AlertDescription>
+          </Alert>
         )}
+        <form noValidate onSubmit={submit} className="space-y-4">
+          <div className="grid gap-4 md:grid-cols-2">
+            <div className="rounded-lg border p-4 space-y-2">
+              <Label htmlFor="depositRate" className="flex items-center gap-2">
+                <ArrowDownToLine className="h-4 w-4 text-emerald-600" /> Deposit rate
+              </Label>
+              <div className="relative">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">₹</span>
+                <Input
+                  id="depositRate"
+                  type="number"
+                  inputMode="decimal"
+                  step="0.01"
+                  min={RATE_MIN}
+                  max={RATE_MAX}
+                  placeholder="e.g. 88.50"
+                  value={deposit}
+                  onChange={(e) => setDeposit(e.target.value)}
+                  aria-invalid={Boolean(depositErr)}
+                  aria-describedby="depositRate-error"
+                  className="pl-7"
+                />
+              </div>
+              <FieldError id="depositRate-error" message={depositErr} />
+              <p className="text-xs text-muted-foreground">
+                {validD ? <>Client pays {inr(10000)} → wallet gets <span className="font-semibold text-foreground">{usd(floor2(10000 / d))}</span></> : "What a client pays in rupees for each 1 USD credited."}
+              </p>
+            </div>
+
+            <div className="rounded-lg border p-4 space-y-2">
+              <Label htmlFor="withdrawRate" className="flex items-center gap-2">
+                <ArrowUpFromLine className="h-4 w-4 text-rose-600" /> Withdrawal rate
+              </Label>
+              <div className="relative">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">₹</span>
+                <Input
+                  id="withdrawRate"
+                  type="number"
+                  inputMode="decimal"
+                  step="0.01"
+                  min={RATE_MIN}
+                  max={RATE_MAX}
+                  placeholder="e.g. 86.50"
+                  value={withdraw}
+                  onChange={(e) => setWithdraw(e.target.value)}
+                  aria-invalid={Boolean(withdrawErr)}
+                  aria-describedby="withdrawRate-error"
+                  className="pl-7"
+                />
+              </div>
+              <FieldError id="withdrawRate-error" message={withdrawErr} />
+              <p className="text-xs text-muted-foreground">
+                {validW ? <>Client withdraws {usd(100)} → receives <span className="font-semibold text-foreground">{inr(floor2(100 * w))}</span></> : "What a client receives in rupees for each 1 USD withdrawn."}
+              </p>
+            </div>
+          </div>
+
+          {validD && validW && (
+            <p className="text-xs text-muted-foreground">
+              Spread: <span className="font-medium text-foreground">{inr(d - w)}</span> per USD
+              {d < w && <span className="text-destructive"> — the withdrawal rate is higher than the deposit rate, so a round trip pays clients more than they put in.</span>}
+            </p>
+          )}
+
+          <p className="text-sm">
+            {data?.marketRate != null ? (
+              <>
+                <span className="font-bold text-foreground">Current market rate: 1 USD = {inr(data.marketRate)}</span>
+                {data.marketRateUpdatedAt && (
+                  <span className="text-xs text-muted-foreground"> · as of {formatDate(data.marketRateUpdatedAt)}</span>
+                )}
+              </>
+            ) : (
+              <span className="text-xs text-muted-foreground">Current market rate is unavailable right now.</span>
+            )}
+          </p>
+
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <p className="text-xs text-muted-foreground">
+              {data?.updatedAt ? `Last updated ${formatDate(data.updatedAt)}` : "Not set yet"}. Requests already submitted keep the rate they were filed at.
+            </p>
+            <Button type="submit" disabled={saving || !dirty}>
+              {saving ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Saving…</> : "Save rates"}
+            </Button>
+          </div>
+        </form>
       </CardContent>
     </Card>
   );
@@ -438,10 +575,11 @@ const PaymentSetup = () => {
         <Tabs defaultValue="methods" className="space-y-6">
           <TabsList>
             <TabsTrigger value="methods">Payment methods</TabsTrigger>
-            <TabsTrigger value="history">Change history</TabsTrigger>
+            <TabsTrigger value="history">History &amp; payments</TabsTrigger>
           </TabsList>
 
           <TabsContent value="methods" className="space-y-6">
+            <FxRatesCard />
             {isLoading ? (
               <div className="grid gap-6 lg:grid-cols-2">
                 <Skeleton className="h-64 w-full" />
@@ -474,12 +612,13 @@ const PaymentSetup = () => {
                 {data.updatedAt && (
                   <p className="text-xs text-muted-foreground">Last updated {formatDate(data.updatedAt)}</p>
                 )}
+                <CurrentReceipts />
               </>
             )}
           </TabsContent>
 
           <TabsContent value="history">
-            <ChangeHistory />
+            <PaymentHistoryView />
           </TabsContent>
         </Tabs>
       </div>

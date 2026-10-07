@@ -8,8 +8,13 @@ import type {
   TradingAccountsResponse,
   CustomMessagePayload,
   CustomMessageItem,
+  AccountTradesResponse,
+  TradeStatusFilter,
+  IbOverviewResponse,
 } from "@/features/users/users.types";
 import { ENDPOINTS } from "@/constants/apiEndpoints";
+
+const USERS_PAGE_SIZE = 100;
 
 export const usersApi = baseApi.injectEndpoints({
   endpoints: (build) => ({
@@ -39,6 +44,29 @@ export const usersApi = baseApi.injectEndpoints({
       }),
     }),
 
+    /**
+     * Every client, all pages walked. The dashboard counts over the whole list
+     * (pending KYC, linked accounts), which one page would undercount.
+     */
+    getAllUsers: build.query<UserListResponse["results"], void>({
+      async queryFn(_arg, _api, _extraOptions, baseQuery) {
+        const users: UserListResponse["results"] = [];
+        for (let page = 1; ; page++) {
+          const res = await baseQuery({
+            url: ENDPOINTS.USERS,
+            method: "GET",
+            params: { page, limit: USERS_PAGE_SIZE },
+          });
+          if (res.error) return { error: res.error };
+          const data = res.data as UserListResponse;
+          users.push(...data.results);
+          if (page >= data.totalPages || data.results.length === 0) break;
+        }
+        return { data: users };
+      },
+      providesTags: [{ type: "Users" as const, id: "LIST" }],
+    }),
+
     /** -------- NEW: fetch single user by id -------- */
     getUserById: build.query<UserDetails, number | string>({
       query: (id) => ({
@@ -51,6 +79,11 @@ export const usersApi = baseApi.injectEndpoints({
         walletBalance: Number(r.walletBalance),
         totalDeposits: Number(r.totalDeposits),
         totalWithdrawals: Number(r.totalWithdrawals),
+        totalCommission:
+          r.totalCommission !== undefined ? Number(r.totalCommission) : null,
+        totalLots: r.totalLots !== undefined ? Number(r.totalLots) : null,
+        ibClients: r.ibClients ?? null,
+        ibTier: r.ibTier ?? null,
       }),
     }),
 
@@ -98,6 +131,33 @@ export const usersApi = baseApi.injectEndpoints({
           fundsAvailable: String(a.fundsAvailable),
         })),
       }),
+    }),
+
+    getTradingAccountTrades: build.query<
+      AccountTradesResponse,
+      {
+        tradingAccountId: number;
+        status: TradeStatusFilter;
+        page: number;
+        limit?: number;
+      }
+    >({
+      query: ({ tradingAccountId, status, page, limit = 25 }) => ({
+        url: `${ENDPOINTS.TRADING_ACCOUNT_TRADES}/${tradingAccountId}`,
+        method: "GET",
+        params: { status, page, limit },
+      }),
+      providesTags: (_res, _err, { tradingAccountId }) => [
+        { type: "Users", id: `trades-${tradingAccountId}` },
+      ],
+    }),
+
+    getClientIbOverview: build.query<IbOverviewResponse, number | string>({
+      query: (userId) => ({
+        url: `${ENDPOINTS.CLIENT_IB_OVERVIEW}/${userId}`,
+        method: "GET",
+      }),
+      providesTags: (_res, _err, userId) => [{ type: "Users", id: `ib-${userId}` }],
     }),
 
     /** --------  send custom message -------- */
@@ -152,6 +212,22 @@ export const usersApi = baseApi.injectEndpoints({
         { type: "Users" as const, id: arg.userId },
       ],
     }),
+
+    /** Ban (isActive: false) or re-enable a client. A banned client is signed out everywhere. */
+    setUserActive: build.mutation<
+      { id: number; isActive: boolean },
+      { userId: number | string; isActive: boolean }
+    >({
+      query: ({ userId, isActive }) => ({
+        url: `${ENDPOINTS.USERBYID}/${userId}/status`,
+        method: "PATCH",
+        data: { isActive },
+      }),
+      invalidatesTags: (_res, _err, arg) => [
+        { type: "Users" as const, id: "LIST" },
+        { type: "Users" as const, id: arg.userId },
+      ],
+    }),
   }),
 
   overrideExisting: false,
@@ -159,10 +235,14 @@ export const usersApi = baseApi.injectEndpoints({
 
 export const {
   useListUsersQuery,
+  useGetAllUsersQuery,
   useGetUserByIdQuery,
   useGetUserTransactionsQuery,
   useGetTradingAccountsQuery,
+  useGetTradingAccountTradesQuery,
+  useGetClientIbOverviewQuery,
   useSendCustomMessageMutation,
   useGetCustomMessageHistoryQuery,
   useUpdateAccountStatusMutation,
+  useSetUserActiveMutation,
 } = usersApi;

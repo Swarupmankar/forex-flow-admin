@@ -21,6 +21,10 @@ import {
   Award,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import {
+  useGetCryptoTransactionsQuery,
+  useGetTransactionsQuery,
+} from "@/API/transactions.api";
 
 const navigationItems = [
   { title: "Dashboard", url: "/", icon: LayoutDashboard },
@@ -28,8 +32,8 @@ const navigationItems = [
   { title: "IB Management", url: "/ib-management", icon: Award },
 
   { title: "Deposit Requests", url: "/deposits", icon: TrendingUp },
-  { title: "Transaction History", url: "/deposit-history", icon: TrendingUp },
   { title: "Withdrawals", url: "/withdrawals", icon: TrendingDown },
+  { title: "Transaction History", url: "/deposit-history", icon: TrendingUp },
   { title: "Account Types", url: "/account-types", icon: Settings },
   { title: "Notifications", url: "/notifications", icon: Bell },
   { title: "Support", url: "/support", icon: MessageCircle },
@@ -38,11 +42,31 @@ const navigationItems = [
   { title: "Settings", url: "/settings", icon: Settings },
 ];
 
+const PENDING_POLL_MS = 30_000;
+
 export function AdminSidebar() {
   const navigate = useNavigate();
   const location = useLocation();
   const dispatch = useDispatch();
   const [showProfileDropdown, setShowProfileDropdown] = useState(false);
+
+  // The same queries the Deposits and Withdrawals pages read, so the badges
+  // count exactly the rows those queues show.
+  const poll = { pollingInterval: PENDING_POLL_MS };
+  const { data: pendingTxs } = useGetTransactionsQuery({ getAllPending: true }, poll);
+  const { data: cryptoDeposits } = useGetCryptoTransactionsQuery({ action: "DEPOSIT" }, poll);
+  const { data: cryptoWithdrawals } = useGetCryptoTransactionsQuery({ action: "WITHDRAW" }, poll);
+
+  const pendingManual = (type: "DEPOSIT" | "WITHDRAW") =>
+    (pendingTxs ?? []).filter(
+      (t) => (t.transactionType ?? "").toString().toUpperCase() === type
+    ).length;
+  const pendingCounts: Record<string, number> = {
+    "/deposits":
+      pendingManual("DEPOSIT") + (cryptoDeposits ?? []).filter((c) => c.status === "PENDING").length,
+    "/withdrawals":
+      pendingManual("WITHDRAW") + (cryptoWithdrawals ?? []).filter((c) => c.status === "PENDING").length,
+  };
 
   const isActive = (path: string) => {
     if (path === "/") {
@@ -105,6 +129,14 @@ export function AdminSidebar() {
                 >
                   {item.title}
                 </span>
+                {pendingCounts[item.url] > 0 && (
+                  <span
+                    className="ml-auto min-w-[1.25rem] rounded-full bg-amber-500 px-1.5 py-0.5 text-center text-[10px] font-bold leading-none text-white"
+                    title={`${pendingCounts[item.url]} pending`}
+                  >
+                    {pendingCounts[item.url] > 99 ? "99+" : pendingCounts[item.url]}
+                  </span>
+                )}
               </NavLink>
             );
           })}

@@ -17,6 +17,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import type { WithdrawalRequest } from "@/pages/Withdrawals";
+import { FxBreakdown } from "@/components/transactions/FxAmount";
 
 interface WithdrawalDetailDrawerProps {
   request: WithdrawalRequest | null;
@@ -257,6 +258,16 @@ export function WithdrawalDetailDrawer({
                   />
                 </div>
               </div>
+              {request.inrAmount != null && (
+                <FxBreakdown
+                  className="mt-4"
+                  usd={request.amount}
+                  inrAmount={request.inrAmount}
+                  fxRate={request.fxRate}
+                  direction="withdraw"
+                  pending={request.status === "pending"}
+                />
+              )}
             </CardContent>
           </Card>
 

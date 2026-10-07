@@ -1,6 +1,13 @@
 import React, { useEffect, useState } from "react";
-import { ArrowDownLeft, ArrowUpRight, Wallet2 } from "lucide-react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  ArrowDownLeft,
+  ArrowUpRight,
+  Bitcoin,
+  Scale,
+  Settings2,
+} from "lucide-react";
+import { Card, CardContent } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -79,115 +86,197 @@ export const CryptoRailsCard: React.FC = () => {
     }
   };
 
-  return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2 text-base">
-          <Wallet2 className="h-4 w-4" />
-          Crypto rails
-        </CardTitle>
-      </CardHeader>
+  const isNegative = (profit?.totals.net ?? 0) < 0;
+  const flowTotal = profit ? profit.totals.revenue + profit.totals.cost : 0;
+  const revenueShare = flowTotal > 0 ? (profit!.totals.revenue / flowTotal) * 100 : 0;
 
-      <CardContent className="space-y-6">
+  return (
+    <Card className="overflow-hidden">
+      {/* Header */}
+      <div className="flex flex-col gap-3 border-b bg-muted/30 p-6 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex items-center gap-3">
+          <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-orange-100 text-orange-600 shadow-sm">
+            <Bitcoin className="h-5 w-5" />
+          </div>
+          <div>
+            <h3 className="text-lg font-semibold text-foreground">Crypto Rails</h3>
+            <p className="text-sm text-muted-foreground">
+              CoinsBuy deposits and withdrawals: what they earned and cost
+            </p>
+          </div>
+        </div>
+        {profit && (
+          <Badge
+            className={`w-fit px-3 py-1 text-sm ${
+              isNegative
+                ? "bg-destructive/10 text-destructive hover:bg-destructive/10"
+                : "bg-emerald-100 text-emerald-700 hover:bg-emerald-100"
+            }`}
+          >
+            Net {usd(profit.totals.net)}
+          </Badge>
+        )}
+      </div>
+
+      <CardContent className="space-y-6 p-6">
         {isLoading || !profit ? (
-          <Skeleton className="h-24 w-full" />
+          <div className="grid gap-4 md:grid-cols-3">
+            {[0, 1, 2].map((i) => (
+              <Skeleton key={i} className="h-36 rounded-xl" />
+            ))}
+          </div>
         ) : (
-          <div className="grid gap-4 sm:grid-cols-3">
-            <div className="rounded-lg border p-3">
-              <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                <ArrowDownLeft className="h-4 w-4" />
-                Deposits ({profit.deposits.count})
+          <div className="grid gap-4 md:grid-cols-3">
+            {/* Deposits */}
+            <div className="space-y-3 rounded-xl border p-5">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
+                  <div className="rounded-lg bg-blue-100 p-1.5 text-blue-600">
+                    <ArrowDownLeft className="h-4 w-4" />
+                  </div>
+                  Deposits
+                </div>
+                <Badge variant="secondary">{profit.deposits.count}</Badge>
               </div>
-              <p className="mt-1 text-lg font-semibold">
+              <p className="text-2xl font-bold text-foreground">
                 {usd(profit.deposits.volume)}
               </p>
-              <p className="text-sm text-destructive">
+              <div className="rounded-lg bg-destructive/5 px-3 py-2 text-sm text-destructive">
                 −{usd(profit.deposits.commissionPaid)} commission
-              </p>
+              </div>
             </div>
 
-            <div className="rounded-lg border p-3">
-              <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                <ArrowUpRight className="h-4 w-4" />
-                Withdrawals ({profit.withdrawals.count})
+            {/* Withdrawals */}
+            <div className="space-y-3 rounded-xl border p-5">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
+                  <div className="rounded-lg bg-purple-100 p-1.5 text-purple-600">
+                    <ArrowUpRight className="h-4 w-4" />
+                  </div>
+                  Withdrawals
+                </div>
+                <Badge variant="secondary">{profit.withdrawals.count}</Badge>
               </div>
-              <p className="mt-1 text-lg font-semibold">
+              <p className="text-2xl font-bold text-foreground">
                 {usd(profit.withdrawals.volume)}
               </p>
-              <p className="text-sm text-emerald-600">
-                +{usd(profit.withdrawals.serviceFeesEarned)} service fees
-              </p>
-              {/* Only the withdrawals the merchant wallet paid gas on. On BTC,
-                  LTC, DASH, BCH, DOGE, ZEC, ALGO, SOL and TON the fee comes
-                  out of the payout and the user bears it, so those contribute
-                  nothing here -- but every token, and ETH, BNB, TRX and the
-                  rest, carries no CoinsBuy commission and this IS their cost. */}
-              {profit.withdrawals.networkFeesPaid > 0 && (
-                <p className="text-sm text-destructive">
-                  −{usd(profit.withdrawals.networkFeesPaid)} network fees
-                </p>
-              )}
+              <div className="space-y-1">
+                <div className="rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-700">
+                  +{usd(profit.withdrawals.serviceFeesEarned)} service fees
+                </div>
+                {/* Only the withdrawals the merchant wallet paid gas on. On BTC,
+                    LTC, DASH, BCH, DOGE, ZEC, ALGO, SOL and TON the fee comes
+                    out of the payout and the user bears it, so those contribute
+                    nothing here -- but every token, and ETH, BNB, TRX and the
+                    rest, carries no CoinsBuy commission and this IS their cost. */}
+                {profit.withdrawals.networkFeesPaid > 0 && (
+                  <div className="rounded-lg bg-destructive/5 px-3 py-2 text-sm text-destructive">
+                    −{usd(profit.withdrawals.networkFeesPaid)} network fees
+                  </div>
+                )}
+              </div>
             </div>
 
-            <div className="rounded-lg border p-3">
-              <div className="text-sm text-muted-foreground">Net</div>
+            {/* Net */}
+            <div
+              className={`space-y-3 rounded-xl border p-5 ${
+                isNegative
+                  ? "border-destructive/30 bg-destructive/5"
+                  : "border-emerald-200 bg-emerald-50/60"
+              }`}
+            >
+              <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
+                <div
+                  className={`rounded-lg p-1.5 ${
+                    isNegative ? "bg-destructive/10 text-destructive" : "bg-emerald-100 text-emerald-600"
+                  }`}
+                >
+                  <Scale className="h-4 w-4" />
+                </div>
+                Net
+              </div>
               <p
-                className={`mt-1 text-lg font-semibold ${
-                  profit.totals.net < 0 ? "text-destructive" : "text-emerald-600"
+                className={`text-2xl font-bold ${
+                  isNegative ? "text-destructive" : "text-emerald-600"
                 }`}
               >
                 {usd(profit.totals.net)}
               </p>
-              <p className="text-sm text-muted-foreground">
-                {usd(profit.totals.revenue)} earned − {usd(profit.totals.cost)} paid
-              </p>
+              <div className="space-y-1.5">
+                <div className="flex h-2 overflow-hidden rounded-full bg-destructive/30">
+                  <div className="h-full bg-emerald-500" style={{ width: `${revenueShare}%` }} />
+                </div>
+                <div className="flex justify-between text-xs text-muted-foreground">
+                  <span>{usd(profit.totals.revenue)} earned</span>
+                  <span>{usd(profit.totals.cost)} paid</span>
+                </div>
+              </div>
             </div>
           </div>
         )}
 
-        <div className="space-y-2">
-          <Label htmlFor="cryptoWithdrawFee">Withdrawal service fee (USD)</Label>
-          <div className="flex gap-2">
-            <Input
-              id="cryptoWithdrawFee"
-              type="number"
-              min="0"
-              step="0.01"
-              value={fee}
-              onChange={(e) => setFee(e.target.value)}
-              className="max-w-40"
-            />
-            <Button onClick={onSave} disabled={isSaving}>
-              {isSaving ? "Saving..." : "Save"}
-            </Button>
+        {/* Settings */}
+        <div className="space-y-3">
+          <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
+            <Settings2 className="h-4 w-4 text-muted-foreground" />
+            Settings
           </div>
-          <p className="text-sm text-muted-foreground">
-            A flat amount, taken from every crypto withdrawal before the payout is
-            created. It has to cover the deposit commission above, so check Net
-            after changing it.
-          </p>
-        </div>
+          <div className="grid gap-4 md:grid-cols-2">
+            <div className="space-y-3 rounded-xl border bg-muted/20 p-5">
+              <Label htmlFor="cryptoWithdrawFee">Withdrawal service fee (USD)</Label>
+              <div className="flex gap-2">
+                <div className="relative flex-1">
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">
+                    $
+                  </span>
+                  <Input
+                    id="cryptoWithdrawFee"
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={fee}
+                    onChange={(e) => setFee(e.target.value)}
+                    className="bg-background pl-7"
+                  />
+                </div>
+                <Button onClick={onSave} disabled={isSaving}>
+                  {isSaving ? "Saving..." : "Save"}
+                </Button>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                A flat amount, taken from every crypto withdrawal before the payout is
+                created. It has to cover the deposit commission above, so check Net
+                after changing it.
+              </p>
+            </div>
 
-        <div className="space-y-2">
-          <Label htmlFor="ibMinWithdraw">IB wallet minimum withdrawal (USD)</Label>
-          <div className="flex gap-2">
-            <Input
-              id="ibMinWithdraw"
-              type="number"
-              min="0"
-              step="0.01"
-              value={ibMin}
-              onChange={(e) => setIbMin(e.target.value)}
-              className="max-w-40"
-            />
-            <Button onClick={onSaveMin} disabled={isSavingMin}>
-              {isSavingMin ? "Saving..." : "Save"}
-            </Button>
+            <div className="space-y-3 rounded-xl border bg-muted/20 p-5">
+              <Label htmlFor="ibMinWithdraw">IB wallet minimum withdrawal (USD)</Label>
+              <div className="flex gap-2">
+                <div className="relative flex-1">
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">
+                    $
+                  </span>
+                  <Input
+                    id="ibMinWithdraw"
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={ibMin}
+                    onChange={(e) => setIbMin(e.target.value)}
+                    className="bg-background pl-7"
+                  />
+                </div>
+                <Button onClick={onSaveMin} disabled={isSavingMin}>
+                  {isSavingMin ? "Saving..." : "Save"}
+                </Button>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                The smallest amount an IB can withdraw from their commission wallet.
+                Applies to the IB wallet only; the crypto wallet has no minimum.
+              </p>
+            </div>
           </div>
-          <p className="text-sm text-muted-foreground">
-            The smallest amount an IB can withdraw from their commission wallet.
-            Applies to the IB wallet only; the crypto wallet has no minimum.
-          </p>
         </div>
       </CardContent>
     </Card>

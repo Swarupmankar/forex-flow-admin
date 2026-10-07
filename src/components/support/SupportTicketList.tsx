@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { Search, MessageSquare, Clock, User, ShieldAlert, CheckCircle2, AlertCircle } from "lucide-react";
+import { formatDistanceToNowStrict } from "date-fns";
+import { Search, MessageSquare, AlertCircle, Headset } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import {
   Select,
@@ -9,9 +10,9 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { cn } from "@/lib/utils";
 import { SupportTicket } from "@/features/support/support.types";
+import { TEMPLATE_CATEGORY_LABEL } from "@/features/support/replyTemplates";
 
 interface SupportTicketListProps {
   tickets: SupportTicket[];
@@ -32,10 +33,8 @@ export const getStatusBadgeConfig = (status?: string) => {
     case "open":
       return { label: "Open", className: "bg-emerald-500/10 text-emerald-600 border-emerald-500/20 dark:text-emerald-400" };
     case "in-progress":
-    case "in_progress":
       return { label: "In Progress", className: "bg-blue-500/10 text-blue-600 border-blue-500/20 dark:text-blue-400" };
     case "awaiting-reply":
-    case "awaiting_reply":
     case "awaiting":
       return { label: "Awaiting Reply", className: "bg-amber-500/10 text-amber-600 border-amber-500/20 dark:text-amber-400 font-semibold" };
     case "resolved":
@@ -60,6 +59,25 @@ export const getPriorityBadgeConfig = (priority?: string) => {
   }
 };
 
+export const categoryLabel = (category?: string) =>
+  TEMPLATE_CATEGORY_LABEL[(category ?? "").toUpperCase() as keyof typeof TEMPLATE_CATEGORY_LABEL] ??
+  category ??
+  "";
+
+export const initialsOf = (name: string) =>
+  name
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((p) => p[0]?.toUpperCase())
+    .join("") || "?";
+
+const isAwaiting = (t: SupportTicket) =>
+  (t.status || "").toLowerCase().includes("awaiting") || !!t.hasUnreadUserMessage;
+
+const ago = (d: Date | null) =>
+  d && !isNaN(d.getTime()) ? formatDistanceToNowStrict(d, { addSuffix: true }) : "";
+
 export function SupportTicketList({
   tickets,
   selectedTicket,
@@ -74,78 +92,62 @@ export function SupportTicketList({
 }: SupportTicketListProps) {
   const [priorityFilter, setPriorityFilter] = useState<string>("all");
 
-  const formatDate = (date: Date | null) => {
-    if (!date || isNaN(date.getTime())) return "N/A";
-    return new Intl.DateTimeFormat("en-US", {
-      month: "short",
-      day: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-    }).format(date);
-  };
+  const filteredTickets = tickets.filter(
+    (t) => priorityFilter === "all" || (t.priority || "").toLowerCase() === priorityFilter
+  );
 
-  const filteredTickets = tickets.filter((t) => {
-    if (priorityFilter === "all") return true;
-    return (t.priority || "").toLowerCase() === priorityFilter;
-  });
-
-  const awaitingCount = tickets.filter(
-    (t) => (t.status || "").toLowerCase().includes("awaiting") || t.hasUnreadUserMessage
-  ).length;
+  const awaitingCount = tickets.filter(isAwaiting).length;
 
   return (
-    <div className="h-full flex flex-col bg-card rounded-xl border shadow-sm overflow-hidden">
-      {/* Header & Stats */}
-      <div className="p-4 border-b bg-muted/20 space-y-3">
+    <div className="flex h-full flex-col overflow-hidden rounded-xl border bg-card shadow-sm">
+      {/* Header */}
+      <div className="space-y-3 border-b bg-muted/20 p-4">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <MessageSquare className="h-5 w-5 text-primary" />
-            <h2 className="text-base font-semibold tracking-tight">Support Tickets</h2>
-            <span className="px-2 py-0.5 text-xs font-semibold rounded-full bg-primary/10 text-primary">
-              {tickets.length}
+            <h2 className="text-sm font-semibold tracking-tight">Tickets</h2>
+            <span className="rounded-full bg-primary/10 px-2 py-0.5 text-xs font-semibold text-primary">
+              {filteredTickets.length}
             </span>
           </div>
           {awaitingCount > 0 && (
-            <Badge variant="outline" className="bg-amber-500/10 text-amber-600 border-amber-500/30 text-[11px] animate-pulse">
-              <AlertCircle className="h-3 w-3 mr-1" />
-              {awaitingCount} Need Reply
+            <Badge variant="outline" className="border-amber-500/30 bg-amber-500/10 text-[11px] text-amber-600">
+              <AlertCircle className="mr-1 h-3 w-3" />
+              {awaitingCount} need reply
             </Badge>
           )}
         </div>
 
-        {/* Search Input */}
         <div className="relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground h-4 w-4" />
+          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <Input
-            placeholder="Search tickets, clients, IDs..."
+            placeholder="Search subject, client or ticket ID…"
             value={searchQuery}
             onChange={(e) => onSearchChange(e.target.value)}
-            className="pl-9 h-9 text-xs bg-background"
+            className="h-9 bg-background pl-9 text-xs"
           />
         </div>
 
-        {/* Filters Grid */}
         <div className="grid grid-cols-3 gap-1.5">
           <Select value={statusFilter} onValueChange={onStatusFilterChange}>
-            <SelectTrigger className="h-8 text-xs bg-background">
+            <SelectTrigger className="h-8 bg-background text-xs">
               <SelectValue placeholder="Status" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">All Status</SelectItem>
+              <SelectItem value="all">All status</SelectItem>
               <SelectItem value="open">Open</SelectItem>
-              <SelectItem value="in_progress">In Progress</SelectItem>
-              <SelectItem value="awaiting_reply">Awaiting Reply</SelectItem>
+              <SelectItem value="in_progress">In progress</SelectItem>
+              <SelectItem value="awaiting_reply">Awaiting reply</SelectItem>
               <SelectItem value="resolved">Resolved</SelectItem>
-              <SelectItem value="closed">Closed</SelectItem>
             </SelectContent>
           </Select>
 
           <Select value={priorityFilter} onValueChange={setPriorityFilter}>
-            <SelectTrigger className="h-8 text-xs bg-background">
+            <SelectTrigger className="h-8 bg-background text-xs">
               <SelectValue placeholder="Priority" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">All Priorities</SelectItem>
+              <SelectItem value="all">All priorities</SelectItem>
               <SelectItem value="high">High</SelectItem>
               <SelectItem value="medium">Medium</SelectItem>
               <SelectItem value="low">Low</SelectItem>
@@ -153,11 +155,11 @@ export function SupportTicketList({
           </Select>
 
           <Select value={clientFilter} onValueChange={onClientFilterChange}>
-            <SelectTrigger className="h-8 text-xs bg-background">
+            <SelectTrigger className="h-8 bg-background text-xs">
               <SelectValue placeholder="Client" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">All Clients</SelectItem>
+              <SelectItem value="all">All clients</SelectItem>
               {clients.map((client) => (
                 <SelectItem key={client} value={client}>
                   {client}
@@ -168,87 +170,88 @@ export function SupportTicketList({
         </div>
       </div>
 
-      {/* Ticket List Items */}
-      <ScrollArea className="flex-1">
-        <div className="p-3 space-y-2">
+      {/* List */}
+      <div className="min-h-0 flex-1 overflow-y-auto">
+        <div className="space-y-1.5 p-2">
           {filteredTickets.map((ticket) => {
             const statusConfig = getStatusBadgeConfig(ticket.status);
             const priorityConfig = getPriorityBadgeConfig(ticket.priority);
             const isSelected = selectedTicket?.id === ticket.id;
-            const isAwaitingReply =
-              (ticket.status || "").toLowerCase().includes("awaiting") || ticket.hasUnreadUserMessage;
+            const awaiting = isAwaiting(ticket);
+            const last = ticket.messages[ticket.messages.length - 1];
+            const preview = last?.content || ticket.description;
+            const lastAt = last?.createdAt ?? ticket.updatedAt ?? ticket.createdAt;
 
             return (
-              <div
+              <button
                 key={ticket.id}
+                type="button"
                 onClick={() => onTicketSelect(ticket)}
                 className={cn(
-                  "p-3.5 rounded-lg border text-left cursor-pointer transition-all duration-150 relative",
+                  "relative w-full min-w-0 overflow-hidden rounded-lg border p-2.5 text-left transition-all duration-150",
                   isSelected
-                    ? "bg-primary/5 border-primary/40 shadow-sm"
-                    : "bg-background hover:bg-muted/40 border-border/60",
-                  isAwaitingReply && !isSelected && "border-l-4 border-l-amber-500"
+                    ? "border-primary/40 bg-primary/5 shadow-sm"
+                    : "border-transparent hover:border-border hover:bg-muted/40"
                 )}
               >
-                {/* Header: Title & Status */}
-                <div className="flex items-start justify-between gap-2 mb-1.5">
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-1.5">
-                      <span className="font-semibold text-xs text-foreground truncate">
-                        {ticket.title}
-                      </span>
-                      {isAwaitingReply && (
-                        <span className="h-2 w-2 rounded-full bg-amber-500 shrink-0 animate-ping" />
-                      )}
+                {awaiting && !isSelected && (
+                  <span className="absolute left-0 top-3 bottom-3 w-1 rounded-r bg-amber-500" />
+                )}
+                <div className="flex gap-3">
+                  <div className="relative shrink-0">
+                    <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/10 text-[11px] font-bold text-primary">
+                      {initialsOf(ticket.clientName)}
                     </div>
-                    <span className="text-[10px] text-muted-foreground font-mono">
-                      #{ticket.ticketId}
-                    </span>
+                    {awaiting && (
+                      <span className="absolute -right-0.5 -top-0.5 h-2.5 w-2.5 rounded-full border-2 border-card bg-amber-500" />
+                    )}
                   </div>
 
-                  <Badge variant="outline" className={cn("text-[10px] px-1.5 py-0.5 shrink-0", statusConfig.className)}>
-                    {statusConfig.label}
-                  </Badge>
-                </div>
-
-                {/* Description Snippet */}
-                <p className="text-xs text-muted-foreground/90 line-clamp-2 mb-2 leading-relaxed">
-                  {ticket.description}
-                </p>
-
-                {/* Meta details footer */}
-                <div className="flex items-center justify-between pt-2 border-t border-border/40 text-[11px] text-muted-foreground">
-                  <div className="flex items-center gap-1 min-w-0 truncate">
-                    <User className="h-3 w-3 shrink-0" />
-                    <span className="truncate font-medium text-foreground/80">{ticket.clientName}</span>
-                  </div>
-
-                  <div className="flex items-center gap-1.5 shrink-0">
-                    {ticket.assignedAgent && (
-                      <span className="px-1.5 py-0.5 rounded bg-muted text-[10px] font-medium text-muted-foreground">
-                        {ticket.assignedAgent}
+                  <div className="min-w-0 flex-1 space-y-1">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className={cn("truncate text-xs", awaiting ? "font-bold" : "font-semibold")}>
+                        {ticket.clientName}
                       </span>
-                    )}
-                    {ticket.priority && (
-                      <Badge variant="outline" className={cn("text-[9px] px-1.5 py-0", priorityConfig.className)}>
-                        {priorityConfig.label}
+                      <span className="shrink-0 text-[10px] text-muted-foreground">{ago(lastAt)}</span>
+                    </div>
+                    <p className="truncate text-xs font-medium text-foreground/90">{ticket.title}</p>
+                    <p className="flex items-center gap-1 truncate text-[11px] text-muted-foreground">
+                      {last?.sender === "support" && <Headset className="h-3 w-3 shrink-0" />}
+                      <span className="truncate">{preview}</span>
+                    </p>
+                    <div className="flex flex-wrap items-center gap-1 pt-1">
+                      <Badge variant="outline" className={cn("px-1.5 py-0 text-[10px]", statusConfig.className)}>
+                        {statusConfig.label}
                       </Badge>
-                    )}
+                      {ticket.priority && (
+                        <Badge variant="outline" className={cn("px-1.5 py-0 text-[10px]", priorityConfig.className)}>
+                          {priorityConfig.label}
+                        </Badge>
+                      )}
+                      {ticket.category && (
+                        <span className="rounded bg-muted px-1.5 text-[10px] text-muted-foreground">
+                          {categoryLabel(ticket.category)}
+                        </span>
+                      )}
+                      <span className="ml-auto font-mono text-[10px] text-muted-foreground">
+                        #{ticket.ticketId}
+                      </span>
+                    </div>
                   </div>
                 </div>
-              </div>
+              </button>
             );
           })}
 
           {filteredTickets.length === 0 && (
-            <div className="text-center py-12 px-4 space-y-2">
-              <MessageSquare className="h-8 w-8 text-muted-foreground/40 mx-auto" />
+            <div className="space-y-2 px-4 py-12 text-center">
+              <MessageSquare className="mx-auto h-8 w-8 text-muted-foreground/40" />
               <p className="text-sm font-medium text-muted-foreground">No tickets found</p>
-              <p className="text-xs text-muted-foreground/60">Try adjusting your filters or search query.</p>
+              <p className="text-xs text-muted-foreground/60">Try adjusting your filters or search.</p>
             </div>
           )}
         </div>
-      </ScrollArea>
+      </div>
     </div>
   );
 }

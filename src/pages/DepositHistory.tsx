@@ -1,18 +1,37 @@
-import { useMemo, useState, useEffect } from "react";
+import { useMemo, useState } from "react";
 import { DashboardLayout } from "@/components/DashboardLayout";
-import { TransactionsHeader } from "@/components/transactions/TransactionsHeader";
-import { TransactionsTable } from "@/components/transactions/TransactionsTable";
-import type { DateRange } from "react-day-picker";
+import { TransactionDetailModal } from "@/components/transactions/TransactionDetailModal";
+import { FundingToolbar } from "@/components/transactions/FundingToolbar";
+import { FundingTable } from "@/components/transactions/FundingTable";
+import { FundingStats } from "@/components/transactions/FundingStats";
+import { CryptoTxDialog } from "@/components/transactions/CryptoTxDialog";
+import { FundingScopeTabs, type FundingScope } from "@/components/transactions/FundingScopeTabs";
+import type {
+  CryptoTransaction,
+  Transaction,
+} from "@/features/transactions/transactions.types";
+import {
+  DEFAULT_FUNDING_FILTERS,
+  applyFundingFilters,
+  fromCrypto,
+  fromManual,
+  type FundingFilters,
+  type FundingRow,
+} from "@/features/transactions/funding";
+import {
+  useGetCryptoTransactionsQuery,
+  useGetTransactionsQuery,
+} from "@/API/transactions.api";
 
-import type { Transaction as ApiTransaction } from "@/features/transactions/transactions.types";
-import { useGetTransactionsQuery } from "@/API/transactions.api";
-
+/** Row shape of the older TransactionsTable, still imported by its components. */
 export interface TransactionRecord {
   id: string;
   date: string;
   clientName: string;
   email: string;
   amount: number;
+  inrAmount?: number | null;
+  fxRate?: number | null;
   currency: string;
   type: "deposit" | "withdrawal";
   paymentMethod: string;
@@ -28,161 +47,79 @@ export interface TransactionRecord {
 }
 
 export default function Transactions() {
-  const [searchTerm, setSearchTerm] = useState("");
-  const [activeFilter, setActiveFilter] = useState("all");
-  const [typeFilter, setTypeFilter] = useState<
-    "all" | "deposit" | "withdrawal"
-  >("all");
-  const [dateRange, setDateRange] = useState<DateRange | undefined>();
+  const [filters, setFilters] = useState<FundingFilters>(DEFAULT_FUNDING_FILTERS);
+  const [selectedManual, setSelectedManual] = useState<Transaction | null>(null);
+  const [selectedCrypto, setSelectedCrypto] = useState<CryptoTransaction | null>(null);
+  const [scope, setScope] = useState<FundingScope>("all");
 
-  // fetch normal transactions history (server-side)
-  const {
-    data: fetched,
-    isLoading,
-    isError,
-  } = useGetTransactionsQuery({
-    getAllPending: false,
-  });
+  // Settled only. Pending ones are the queues on Deposits and Withdrawals.
+  const processedQ = useGetTransactionsQuery({ getAllPending: false });
+  const cryptoQ = useGetCryptoTransactionsQuery();
 
-  // normalize fetched data -> ApiTransaction[]
-  const apiTransactions: ApiTransaction[] = useMemo(() => {
-    if (!fetched) return [];
-    if (Array.isArray(fetched)) return fetched as ApiTransaction[];
-    const asAny = fetched as any;
-    if (Array.isArray(asAny.transactions))
-      return asAny.transactions as ApiTransaction[];
-    return (asAny as ApiTransaction[]) || [];
-  }, [fetched]);
+  const settledRows: FundingRow[] = useMemo(
+    () =>
+      [
+        ...(processedQ.data ?? []).map(fromManual),
+        ...(cryptoQ.data ?? []).map(fromCrypto),
+      ].filter((r) => r.status !== "pending"),
+    [processedQ.data, cryptoQ.data]
+  );
+  const ibRows = useMemo(() => settledRows.filter((r) => r.isIb), [settledRows]);
+  const rows = scope === "ib" ? ibRows : settledRows;
 
-  // normalize status strings: PAID|APPROVED => completed, REJECTED => rejected, else pending
-  const statusToNormalized = (
-    raw?: any
-  ): "completed" | "rejected" | "pending" => {
-    const sRaw = (raw ?? "").toString();
-    const up = sRaw.toUpperCase();
-    if (up === "PAID" || up === "APPROVED") return "completed";
-    if (up === "REJECTED") return "rejected";
-    return "pending";
+  const visible = useMemo(() => applyFundingFilters(rows, filters), [rows, filters]);
+
+  const switchScope = (next: FundingScope) => {
+    setScope(next);
+    setFilters(DEFAULT_FUNDING_FILTERS);
   };
 
-  // Map normal transactions (only non-pending: APPROVED/REJECTED)
-  const transactionRecordsFromTxs: TransactionRecord[] = useMemo(() => {
-    if (!apiTransactions || apiTransactions.length === 0) return [];
-
-    return apiTransactions
-      .filter((t) => {
-        const norm = statusToNormalized(t.transactionStatus);
-        return norm === "completed" || norm === "rejected";
-      })
-      .map((t) => {
-        const type =
-          (t.transactionType ?? "").toString().toUpperCase() === "DEPOSIT"
-            ? "deposit"
-            : "withdrawal";
-        const s = statusToNormalized(t.transactionStatus);
-        const paymentMethod =
-          t.mode === "UPI"
-            ? "UPI"
-            : t.mode === "CRYPTO"
-            ? "Crypto"
-            : "Bank Transfer";
-        const trxId = t.utrNo ?? t.upiId ?? t.cryptoNetwork ?? "" ?? "";
-
-        return {
-          id: String(t.id),
-          date: (t.createdAt ?? "").split("T")[0],
-          clientName: t.name ?? `User ${t.userId ?? t.id}`,
-          email: t.email ?? "",
-          amount:
-            type === "withdrawal"
-              ? -Number(t.amount ?? 0)
-              : Number(t.amount ?? 0),
-          currency: "",
-          type,
-          paymentMethod,
-          transactionId: trxId,
-          status: s,
-          avatar: undefined,
-          processedAt: t.updatedAt ?? undefined,
-          notes: t.rejectionReason ?? undefined,
-        } as TransactionRecord;
-      });
-  }, [apiTransactions]);
-
-  // Combined sorted records (most recent first)
-  const allRecords: TransactionRecord[] = useMemo(() => {
-    const combined = [...transactionRecordsFromTxs];
-
-    combined.sort((a, b) => {
-      const da = new Date(a.processedAt ?? a.date).getTime();
-      const db = new Date(b.processedAt ?? b.date).getTime();
-      return db - da;
-    });
-
-    return combined;
-  }, [transactionRecordsFromTxs]);
-
-  useEffect(() => {
-    console.log("Final merged records ->", allRecords);
-  }, [allRecords]);
-
-  // Filter/search
-  const filteredTransactions = useMemo(() => {
-    const term = searchTerm.trim().toLowerCase();
-
-    return allRecords.filter((r) => {
-      const matchesSearch =
-        term === "" ||
-        r.clientName.toLowerCase().includes(term) ||
-        r.email.toLowerCase().includes(term) ||
-        (r.transactionId ?? "").toLowerCase().includes(term);
-
-      const pmCode = (r.paymentMethod ?? "").toLowerCase().replace(" ", "-");
-      const matchesPaymentFilter =
-        activeFilter === "all" || pmCode === activeFilter;
-
-      const matchesTypeFilter = typeFilter === "all" || r.type === typeFilter;
-
-      const matchesDate =
-        !dateRange ||
-        !dateRange.from ||
-        (() => {
-          const created = new Date(r.processedAt ?? r.date);
-          const from = dateRange.from ? new Date(dateRange.from) : undefined;
-          const to = dateRange.to ? new Date(dateRange.to) : undefined;
-          if (from && created < new Date(from.setHours(0, 0, 0, 0)))
-            return false;
-          if (to && created > new Date(to.setHours(23, 59, 59, 999)))
-            return false;
-          return true;
-        })();
-
-      return (
-        matchesSearch &&
-        matchesPaymentFilter &&
-        matchesTypeFilter &&
-        matchesDate
-      );
-    });
-  }, [allRecords, searchTerm, activeFilter, typeFilter, dateRange]);
+  const open = (row: FundingRow) => {
+    if (row.crypto) setSelectedCrypto(row.crypto);
+    else if (row.manual) setSelectedManual(row.manual);
+  };
 
   return (
     <DashboardLayout title="Transaction History">
-      <div className="space-y-6">
-        <TransactionsHeader
-          searchTerm={searchTerm}
-          onSearchChange={setSearchTerm}
-          dateRange={dateRange}
-          onDateRangeChange={setDateRange}
-          activeFilter={activeFilter}
-          onFilterChange={setActiveFilter}
-          typeFilter={typeFilter}
-          onTypeFilterChange={(v) =>
-            setTypeFilter(v as "all" | "deposit" | "withdrawal")
-          }
+      <div className="space-y-5">
+        <div>
+          <h1 className="text-2xl font-bold text-foreground">Transaction History</h1>
+          <p className="text-sm text-muted-foreground">
+            Settled deposits and withdrawals across bank, UPI and crypto. Pending ones are on the Deposits and Withdrawals pages.
+          </p>
+        </div>
+
+        <FundingScopeTabs
+          scope={scope}
+          onChange={switchScope}
+          counts={{ all: settledRows.length, ib: ibRows.length }}
         />
 
-        <TransactionsTable transactions={filteredTransactions} />
+        <FundingStats rows={rows} variant="history" />
+
+        {/* IB rows are all withdrawals, so the type filter and column only apply to All. */}
+        <FundingToolbar
+          rows={rows}
+          filters={filters}
+          onChange={setFilters}
+          showDirection={scope === "all"}
+          statuses={["approved", "rejected"]}
+        />
+
+        <FundingTable
+          rows={visible}
+          loading={processedQ.isLoading || cryptoQ.isLoading}
+          error={processedQ.isError || cryptoQ.isError}
+          onOpen={open}
+          showType={scope === "all"}
+        />
+
+        <TransactionDetailModal
+          transaction={selectedManual}
+          isOpen={selectedManual !== null}
+          onClose={() => setSelectedManual(null)}
+        />
+        <CryptoTxDialog tx={selectedCrypto} onClose={() => setSelectedCrypto(null)} />
       </div>
     </DashboardLayout>
   );

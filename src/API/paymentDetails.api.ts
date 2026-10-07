@@ -37,8 +37,112 @@ export interface PaymentDetailsHistoryEntry {
   createdAt: string;
 }
 
+/**
+ * INR per 1 USD for bank / UPI money. Deposits convert at depositRate,
+ * withdrawals at withdrawRate. Null until the broker sets them, and bank / UPI
+ * money does not move until both are set.
+ */
+export interface FiatRates {
+  depositRate: number | null;
+  withdrawRate: number | null;
+  updatedAt: string | null;
+  /** Market USD/INR from the FX feed, for reference; null when unavailable. */
+  marketRate?: number | null;
+  marketRateUpdatedAt?: string | null;
+}
+
+/** A bank / UPI deposit or withdrawal filed while a method was live. */
+export interface MethodReceipt {
+  id: number;
+  userId: number;
+  name: string;
+  email: string;
+  inrAmount: number | null;
+  usdAmount: number;
+  fxRate: number | null;
+  /**
+   * Deposit: the client's UTR (UPI) or transaction number (bank).
+   * Withdrawal: the client's UPI ID or account it is paid to.
+   */
+  reference: string | null;
+  status: "PENDING" | "APPROVED" | "REJECTED";
+  createdAt: string;
+}
+
+/** One direction of money: totals per status, and the latest rows. */
+export interface MoneyFlow {
+  count: number;
+  totalInr: number;
+  totalUsd: number;
+  approvedCount: number;
+  approvedInr: number;
+  approvedUsd: number;
+  pendingCount: number;
+  pendingInr: number;
+  pendingUsd: number;
+  rejectedCount: number;
+  rejectedInr: number;
+  rejectedUsd: number;
+  /** Distinct clients among the listed rows. */
+  clients: number;
+  /** Newest first, capped at 200; the totals cover every row. */
+  items: MethodReceipt[];
+}
+
+interface PeriodTotals {
+  activeFrom: string;
+  /** Null while it is the live one. */
+  activeTo: string | null;
+  isCurrent: boolean;
+  deposits: MoneyFlow;
+  withdrawals: MoneyFlow;
+}
+
+export interface UpiPeriod extends PeriodTotals {
+  upiId: string;
+  payeeName: string;
+}
+
+export interface BankPeriod extends PeriodTotals {
+  bankName: string;
+  accountHolderName: string;
+  bankAccountNo: string;
+  bankIfscCode: string;
+}
+
+export interface PaymentMethodChange {
+  at: string;
+  method: "UPI" | "BANK";
+  /** Empty when the method was first added. */
+  from: string;
+  /** Empty when the method was removed. */
+  to: string;
+}
+
+export interface PaymentReceipts {
+  upi: UpiPeriod[];
+  bank: BankPeriod[];
+  changes: PaymentMethodChange[];
+}
+
 export const paymentDetailsApi = baseApi.injectEndpoints({
   endpoints: (build) => ({
+    getPaymentReceipts: build.query<PaymentReceipts, void>({
+      query: () => ({ url: ENDPOINTS.PAYMENT_DETAILS.RECEIPTS, method: "GET" }),
+      providesTags: [{ type: "PaymentDetails", id: "RECEIPTS" }],
+    }),
+    getFiatRates: build.query<FiatRates, void>({
+      query: () => ({ url: ENDPOINTS.PAYMENT_DETAILS.FX_RATES, method: "GET" }),
+      providesTags: [{ type: "PaymentDetails", id: "FX_RATES" }],
+    }),
+    setFiatRates: build.mutation<FiatRates, { depositRate: number; withdrawRate: number }>({
+      query: (body) => ({
+        url: ENDPOINTS.PAYMENT_DETAILS.FX_RATES,
+        method: "POST",
+        data: body,
+      }),
+      invalidatesTags: [{ type: "PaymentDetails", id: "FX_RATES" }],
+    }),
     getPaymentDetails: build.query<PaymentDetails, void>({
       query: () => ({ url: ENDPOINTS.PAYMENT_DETAILS.CURRENT, method: "GET" }),
       providesTags: [{ type: "PaymentDetails", id: "CURRENT" }],
@@ -52,6 +156,7 @@ export const paymentDetailsApi = baseApi.injectEndpoints({
       invalidatesTags: [
         { type: "PaymentDetails", id: "CURRENT" },
         { type: "PaymentDetails", id: "HISTORY" },
+        { type: "PaymentDetails", id: "RECEIPTS" },
       ],
     }),
     getPaymentDetailsHistory: build.query<PaymentDetailsHistoryEntry[], void>({
@@ -67,6 +172,9 @@ export const {
   useGetPaymentDetailsQuery,
   useUpdatePaymentDetailsMutation,
   useGetPaymentDetailsHistoryQuery,
+  useGetFiatRatesQuery,
+  useSetFiatRatesMutation,
+  useGetPaymentReceiptsQuery,
 } = paymentDetailsApi;
 
 /** The server's message from an RTK/axios error, or a fallback. */

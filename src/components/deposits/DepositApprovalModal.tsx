@@ -26,6 +26,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Separator } from "@/components/ui/separator";
 import { formatDistanceToNow } from "date-fns";
 import type { DepositRequest } from "@/pages/DepositRequests";
+import { FxBreakdown } from "@/components/transactions/FxAmount";
 
 interface DepositApprovalModalProps {
   request: DepositRequest;
@@ -168,12 +169,18 @@ export function DepositApprovalModal({
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-3">
-                <div className="flex items-center justify-between">
-                  <span className="font-semibold text-lg">Amount:</span>
-                  <span className="text-xl font-bold text-primary">
-                    ${request.amount}
-                  </span>
-                </div>
+                <FxBreakdown
+                  usd={request.amount}
+                  inrAmount={request.inrAmount}
+                  fxRate={request.fxRate}
+                  direction="deposit"
+                  pending={request.status === "pending"}
+                />
+                {request.status === "pending" && request.inrAmount != null && (
+                  <p className="text-xs text-muted-foreground">
+                    Approving credits exactly this USD amount, at the rate fixed when the client filed it.
+                  </p>
+                )}
 
                 <Separator />
 
