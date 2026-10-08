@@ -1,5 +1,5 @@
-export const API_BASE_URL =
-  import.meta.env.VITE_API_URL ?? "http://localhost:3000/v1";
+// Same-origin path (/api/v1); the dev server or Vercel proxies it to the backend.
+export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
 
 export const ENDPOINTS = {
   AUTH: "/broker/auth/login",

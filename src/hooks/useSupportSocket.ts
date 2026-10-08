@@ -1,5 +1,4 @@
 import { useEffect, useRef, useState, useCallback } from "react";
-import { API_BASE_URL } from "@/constants/apiEndpoints";
 import { endSession } from "@/lib/session";
 import { freshAccessToken, refreshAccessToken } from "@/service/axiosInstance";
 
@@ -9,14 +8,23 @@ const RECONNECT_BASE_MS = 1000;
 const RECONNECT_MAX_MS = 30000;
 
 /**
+ * VITE_SUPPORT_WS_URL from .env: a full ws(s):// address, or a path such as
+ * /api/ws/support that goes through this app's own origin (the dev proxy).
  * Browsers cannot set headers on a WebSocket, so the access token goes in the
  * query string, which the server reads (support-socket.ts extractToken).
+ * Null when the URL is not configured.
  */
-const getWsUrl = (token: string) => {
-  const base = API_BASE_URL.replace(/\/v1\/?$/, "");
-  const wsProto = base.startsWith("https") ? "wss" : "ws";
-  const host = base.replace(/^https?:\/\//, "");
-  return `${wsProto}://${host}/ws/support?token=${encodeURIComponent(token)}`;
+const getWsUrl = (token: string): string | null => {
+  const configured: string | undefined = import.meta.env.VITE_SUPPORT_WS_URL;
+  if (!configured) return null;
+  const secure = window.location.protocol === "https:";
+  const url = configured.startsWith("/")
+    ? new URL(configured, `${secure ? "wss" : "ws"}://${window.location.host}`)
+    : new URL(configured);
+  // A page served over https cannot open a plain ws:// socket.
+  if (secure && url.protocol === "ws:") url.protocol = "wss:";
+  url.searchParams.set("token", token);
+  return url.toString();
 };
 
 /** The logged-in broker's id: the server only lets a broker follow its own room. */
@@ -56,6 +64,10 @@ export const useSupportSocket = ({
   useEffect(() => {
     const brokerId = currentBrokerId();
     if (!localStorage.getItem("token") || !brokerId) return;
+    if (!import.meta.env.VITE_SUPPORT_WS_URL) {
+      console.warn("[SupportWS Admin] VITE_SUPPORT_WS_URL is not set; live support updates are off.");
+      return;
+    }
 
     let closed = false;
     let attempt = 0;
@@ -74,7 +86,9 @@ export const useSupportSocket = ({
         endSession("expired");
         return;
       }
-      const ws = new WebSocket(getWsUrl(token));
+      const wsUrl = getWsUrl(token);
+      if (!wsUrl) return;
+      const ws = new WebSocket(wsUrl);
       socketRef.current = ws;
 
       ws.onopen = () => {
