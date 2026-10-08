@@ -22,6 +22,12 @@ import {
   AccountType,
 } from "@/features/accountTypes/accountTypes.types";
 
+// The number fields are held as the text in the input, so one can be cleared
+// and retyped; parsing it on every keystroke turned an empty field back into 0.
+// A whole number of 0 or more, or null if the text is not one.
+const toWhole = (text: string): number | null =>
+  /^\d+$/.test(text.trim()) ? Number(text.trim()) : null;
+
 interface AccountTypeModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -38,9 +44,9 @@ export function AccountTypeModal({
   const [formData, setFormData] = useState({
     name: "",
     description: "",
-    minDeposit: 100,
-    leverage: 100,
-    commission: 0,
+    minDeposit: "100",
+    leverage: "100",
+    commission: "0",
     takerFeed: "",
     accountType: "REAL" as AccountKind,
     isActive: true,
@@ -53,9 +59,9 @@ export function AccountTypeModal({
       setFormData({
         name: accountType.name,
         description: accountType.description,
-        minDeposit: accountType.minDeposit,
-        leverage: accountType.leverage,
-        commission: accountType.commission,
+        minDeposit: String(accountType.minDeposit),
+        leverage: String(accountType.leverage),
+        commission: String(accountType.commission),
         takerFeed: accountType.takerFeed,
         accountType: accountType.accountType,
         isActive: accountType.isActive,
@@ -64,9 +70,9 @@ export function AccountTypeModal({
       setFormData({
         name: "",
         description: "",
-        minDeposit: 100,
-        leverage: 100,
-        commission: 0,
+        minDeposit: "100",
+        leverage: "100",
+        commission: "0",
         takerFeed: "",
         accountType: "REAL",
         isActive: true,
@@ -86,16 +92,19 @@ export function AccountTypeModal({
       newErrors.description = "Description is required";
     }
 
-    if (formData.minDeposit < 1) {
-      newErrors.minDeposit = "Minimum deposit must be at least $1";
+    // 0 is allowed (e.g. a demo type with no minimum).
+    if (toWhole(formData.minDeposit) === null) {
+      newErrors.minDeposit = "Minimum deposit must be a whole number of 0 or more";
     }
 
-    if (!Number.isInteger(formData.leverage) || formData.leverage < 1) {
+    const leverage = toWhole(formData.leverage);
+    if (leverage === null || leverage < 1) {
       newErrors.leverage = "Leverage must be a whole number of at least 1";
     }
 
-    if (formData.commission < 0) {
-      newErrors.commission = "Commission is required";
+    // 0 means no commission. The backend stores it as a whole number.
+    if (toWhole(formData.commission) === null) {
+      newErrors.commission = "Commission must be a whole number of 0 or more";
     }
 
     // Only on create: the feed cannot be changed afterwards. Same rule as the
@@ -120,7 +129,12 @@ export function AccountTypeModal({
       return;
     }
 
-    onSave(formData);
+    onSave({
+      ...formData,
+      minDeposit: toWhole(formData.minDeposit) as number,
+      leverage: toWhole(formData.leverage) as number,
+      commission: toWhole(formData.commission) as number,
+    });
   };
 
   const handleInputChange = (field: keyof typeof formData, value: any) => {
@@ -219,13 +233,11 @@ export function AccountTypeModal({
                 <Input
                   id="minDeposit"
                   type="number"
-                  min="1"
+                  min="0"
+                  step="1"
                   value={formData.minDeposit}
                   onChange={(e) =>
-                    handleInputChange(
-                      "minDeposit",
-                      parseInt(e.target.value) || 0
-                    )
+                    handleInputChange("minDeposit", e.target.value)
                   }
                   className={errors.minDeposit ? "border-destructive" : ""}
                 />
@@ -247,7 +259,7 @@ export function AccountTypeModal({
                     step="1"
                     value={formData.leverage}
                     onChange={(e) =>
-                      handleInputChange("leverage", parseInt(e.target.value) || 0)
+                      handleInputChange("leverage", e.target.value)
                     }
                     placeholder="e.g., 500"
                     className={errors.leverage ? "border-destructive" : ""}
@@ -269,14 +281,13 @@ export function AccountTypeModal({
                 <Input
                   id="commission"
                   type="number"
+                  min="0"
+                  step="1"
                   value={formData.commission}
                   onChange={(e) =>
-                    handleInputChange(
-                      "commission",
-                      parseFloat(e.target.value) || 0
-                    )
+                    handleInputChange("commission", e.target.value)
                   }
-                  placeholder="e.g., 0%, $7 per lot, 0.02%"
+                  placeholder="e.g., 7 (0 for no commission)"
                   className={errors.commission ? "border-destructive" : ""}
                 />
                 {errors.commission && (
