@@ -115,6 +115,7 @@ export default function AccountTypes() {
             minDeposit: accountTypeData.minDeposit,
             leverage: accountTypeData.leverage,
             commission: accountTypeData.commission,
+            accountType: accountTypeData.accountType,
           },
         }).unwrap();
 
@@ -135,6 +136,7 @@ export default function AccountTypes() {
           leverage: accountTypeData.leverage,
           commission: accountTypeData.commission,
           takerFeed: accountTypeData.takerFeed,
+          accountType: accountTypeData.accountType,
         }).unwrap();
 
         const newPlan = mapBrokerPlanToAccountType(res.template);

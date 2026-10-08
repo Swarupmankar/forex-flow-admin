@@ -66,6 +66,9 @@ export function AccountTypeCard({
             </div>
 
             <div className="flex items-center gap-2 ml-2">
+              <Badge variant="outline">
+                {accountType.accountType === "DEMO" ? "Demo" : "Real"}
+              </Badge>
               <Badge variant={accountType.isActive ? "default" : "secondary"}>
                 {accountType.isActive ? "Active" : "Inactive"}
               </Badge>

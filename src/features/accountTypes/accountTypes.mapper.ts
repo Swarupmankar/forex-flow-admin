@@ -10,6 +10,9 @@ export function mapBrokerPlanToAccountType(plan: BrokerPlan): AccountType {
     leverage: plan.leverage,
     commission: plan.commission,
     takerFeed: plan.takerFeed,
+    // Types from before the backend had a kind come back as REAL from the
+    // migration default; the fallback only covers a stale API build.
+    accountType: plan.accountType ?? "REAL",
     isActive: plan.isActive,
     createdAt: plan.createdAt,
   };

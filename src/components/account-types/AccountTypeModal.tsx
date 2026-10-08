@@ -10,7 +10,17 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { AccountType } from "@/features/accountTypes/accountTypes.types";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  AccountKind,
+  AccountType,
+} from "@/features/accountTypes/accountTypes.types";
 
 interface AccountTypeModalProps {
   isOpen: boolean;
@@ -32,6 +42,7 @@ export function AccountTypeModal({
     leverage: 100,
     commission: 0,
     takerFeed: "",
+    accountType: "REAL" as AccountKind,
     isActive: true,
   });
 
@@ -46,6 +57,7 @@ export function AccountTypeModal({
         leverage: accountType.leverage,
         commission: accountType.commission,
         takerFeed: accountType.takerFeed,
+        accountType: accountType.accountType,
         isActive: accountType.isActive,
       });
     } else {
@@ -56,6 +68,7 @@ export function AccountTypeModal({
         leverage: 100,
         commission: 0,
         takerFeed: "",
+        accountType: "REAL",
         isActive: true,
       });
     }
@@ -167,6 +180,29 @@ export function AccountTypeModal({
                     {errors.description}
                   </p>
                 )}
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="accountType">Account Kind *</Label>
+                <Select
+                  value={formData.accountType}
+                  onValueChange={(value) =>
+                    handleInputChange("accountType", value as AccountKind)
+                  }
+                >
+                  <SelectTrigger id="accountType" className="w-full sm:w-48">
+                    <SelectValue placeholder="Real or Demo" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="REAL">Real</SelectItem>
+                    <SelectItem value="DEMO">Demo</SelectItem>
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground">
+                  {accountType
+                    ? "Changes which kind of account can be opened on this type from now on. Accounts already open are not affected."
+                    : "Only this kind of trading account can be opened on this type. Traders see Real types when opening a real account and Demo types for a demo one."}
+                </p>
               </div>
             </div>
           </div>
