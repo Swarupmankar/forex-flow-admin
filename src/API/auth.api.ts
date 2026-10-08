@@ -1,5 +1,10 @@
 import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
-import api from "@/service/axiosInstance";
+import api, {
+  ACCESS_TOKEN_KEY,
+  REFRESH_TOKEN_KEY,
+  hasLiveSession,
+  storeTokens,
+} from "@/service/axiosInstance";
 
 // Initial State
 interface AuthState {
@@ -11,14 +16,14 @@ interface AuthState {
   error: string | null;
 }
 
-import { isTokenExpired } from "@/service/axiosInstance";
-
 const loadInitialState = (): AuthState => {
   try {
-    const token = localStorage.getItem("token");
+    const token = localStorage.getItem(ACCESS_TOKEN_KEY);
     const user = JSON.parse(localStorage.getItem("user") || "null");
     if (token && user) {
-      if (isTokenExpired(token)) {
+      // The session is alive while the REFRESH token is: an expired access
+      // token is refreshed by the axios instance on the first request.
+      if (!hasLiveSession()) {
         localStorage.clear();
       } else {
         return {
@@ -60,8 +65,9 @@ export const login = createAsyncThunk(
         throw new Error("Invalid response from server");
       }
 
-      // Save to localStorage
-      localStorage.setItem("token", tokens.access.token);
+      // Save to localStorage. Both tokens: the refresh token is what keeps the
+      // broker signed in past the access token's 30 minutes, for 24 hours.
+      storeTokens(tokens);
       localStorage.setItem("user", JSON.stringify(broker));
 
       return { user: broker, token: tokens.access.token };
@@ -70,6 +76,29 @@ export const login = createAsyncThunk(
     }
   }
 );
+
+/**
+ * Sign out: forget the session locally first (so the UI never waits on the
+ * network), then tell the backend to revoke the refresh token so it cannot be
+ * redeemed from a copy. A refresh token the backend no longer has is a 404 and
+ * means the same thing, so the result is ignored.
+ */
+export const signOut = createAsyncThunk("auth/signOut", async (_, { dispatch }) => {
+  let refreshToken: string | null = null;
+  try {
+    refreshToken = localStorage.getItem(REFRESH_TOKEN_KEY);
+  } catch {
+    // ignore
+  }
+  dispatch(logout());
+  if (refreshToken) {
+    try {
+      await api.post("/broker/auth/logout", { refreshToken });
+    } catch {
+      // ignore
+    }
+  }
+});
 
 // Slice
 const authSlice = createSlice({

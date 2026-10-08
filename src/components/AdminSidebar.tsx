@@ -1,7 +1,7 @@
 import { useState } from "react";
-import { logout } from "@/API/auth.api";
+import { signOut } from "@/API/auth.api";
 import { useDispatch, useSelector } from "react-redux";
-import { RootState } from "@/API/store";
+import { AppDispatch, RootState } from "@/API/store";
 
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
 import {
@@ -41,7 +41,7 @@ const navigationItems = [
 export function AdminSidebar() {
   const navigate = useNavigate();
   const location = useLocation();
-  const dispatch = useDispatch();
+  const dispatch = useDispatch<AppDispatch>();
   const [showProfileDropdown, setShowProfileDropdown] = useState(false);
 
   const isActive = (path: string) => {
@@ -52,7 +52,7 @@ export function AdminSidebar() {
   };
 
   const handleLogout = () => {
-    dispatch(logout());
+    dispatch(signOut());
     navigate("/login");
   };
 

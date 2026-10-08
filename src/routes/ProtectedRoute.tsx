@@ -1,17 +1,15 @@
 import { Navigate, Outlet } from "react-router-dom";
-import { isTokenExpired } from "@/service/axiosInstance";
+import { hasLiveSession } from "@/service/axiosInstance";
 
+// Gates on the REFRESH token, not the access token: an access token that ran
+// out mid-session is renewed by the axios instance on the next request, and
+// the broker is only sent back to login once the 24-hour session is over.
 const ProtectedRoute = () => {
-  const token = localStorage.getItem("token");
-  const expired = isTokenExpired(token);
-
-  if (!token || expired) {
-    if (expired && token) {
-      try {
-        localStorage.clear();
-      } catch (e) {
-        // ignore
-      }
+  if (!hasLiveSession()) {
+    try {
+      localStorage.clear();
+    } catch (e) {
+      // ignore
     }
     return <Navigate to="/login" replace />;
   }
