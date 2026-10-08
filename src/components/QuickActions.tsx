@@ -1,39 +1,65 @@
 import { FileCheck, TrendingUp, TrendingDown, Bell } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-
-const quickActions = [
-  {
-    title: "Approve Pending KYC",
-    description: "47 requests waiting",
-    icon: FileCheck,
-    iconColor: "text-orange-600",
-    buttonText: "Review KYC",
-  },
-  {
-    title: "Review Deposits",
-    description: "15 pending deposits",
-    icon: TrendingUp,
-    iconColor: "text-green-600",
-    buttonText: "Review Deposits",
-  },
-  {
-    title: "Review Withdrawals",
-    description: "8 pending withdrawals",
-    icon: TrendingDown,
-    iconColor: "text-red-600",
-    buttonText: "Review Withdrawals",
-  },
-  {
-    title: "Send Notification",
-    description: "Broadcast to clients",
-    icon: Bell,
-    iconColor: "text-blue-600",
-    buttonText: "Send Message",
-  },
-];
+import { useGetTransactionsQuery } from "@/API/transactions.api";
+import { useGetAllUsersQuery } from "@/API/users.api";
 
 export function QuickActions() {
+  const navigate = useNavigate();
+  const { data: pending, isLoading } = useGetTransactionsQuery({
+    getAllPending: true,
+  });
+  const { data: users, isLoading: isUsersLoading } = useGetAllUsersQuery();
+
+  const pendingKyc = isUsersLoading
+    ? "Loading…"
+    : users
+    ? `${users.filter((u) => u.kycStatus?.toUpperCase() === "PENDING").length} requests waiting`
+    : "Pending KYC unavailable";
+
+  const countPending = (type: "DEPOSIT" | "WITHDRAW", label: string) => {
+    if (isLoading) return "Loading…";
+    if (!pending) return `Pending ${label} unavailable`;
+    const n = pending.filter((t) => t.transactionType === type).length;
+    return `${n} pending ${label}`;
+  };
+
+  const quickActions = [
+    {
+      title: "Approve Pending KYC",
+      description: pendingKyc,
+      icon: FileCheck,
+      iconColor: "text-orange-600",
+      buttonText: "Review KYC",
+      to: "/clients",
+    },
+    {
+      title: "Review Deposits",
+      description: countPending("DEPOSIT", "deposits"),
+      icon: TrendingUp,
+      iconColor: "text-green-600",
+      buttonText: "Review Deposits",
+      to: "/deposits",
+    },
+    {
+      title: "Review Withdrawals",
+      description: countPending("WITHDRAW", "withdrawals"),
+      icon: TrendingDown,
+      iconColor: "text-red-600",
+      buttonText: "Review Withdrawals",
+      to: "/withdrawals",
+    },
+    {
+      title: "Send Notification",
+      description: "Broadcast to clients",
+      icon: Bell,
+      iconColor: "text-blue-600",
+      buttonText: "Send Message",
+      to: "/notifications",
+    },
+  ];
+
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
       {quickActions.map((action) => (
@@ -49,9 +75,10 @@ export function QuickActions() {
                   <p className="text-xs text-muted-foreground mt-1">{action.description}</p>
                 </div>
               </div>
-              <Button 
-                variant="outline" 
-                size="sm" 
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => navigate(action.to)}
                 className="w-full h-9 hover:bg-primary hover:text-primary-foreground hover:border-primary transition-all duration-200 font-medium"
               >
                 {action.buttonText}

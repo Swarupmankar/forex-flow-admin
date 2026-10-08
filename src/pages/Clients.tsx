@@ -1,151 +1,187 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import {
+  ArrowDownLeft,
+  Download,
+  ShieldCheck,
+  Users,
+  Wallet,
+  type LucideIcon,
+} from "lucide-react";
 import { DashboardLayout } from "@/components/DashboardLayout";
+import { Button } from "@/components/ui/button";
 import { ClientsTable } from "@/components/clients/ClientsTable";
-import { ClientsHeader } from "@/components/clients/ClientsHeader";
-import { ClientsFilters } from "@/components/clients/ClientsFilters";
-import { Client } from "@/features/users/users.types";
-import { useListUsersQuery } from "@/API/users.api";
+import { ClientsToolbar } from "@/components/clients/ClientsToolbar";
+import { useGetAllUsersQuery, useSetUserActiveMutation } from "@/API/users.api";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { toast } from "sonner";
+import {
+  DEFAULT_CLIENT_FILTERS,
+  applyClientFilters,
+  toClientRow,
+  type ClientFilters,
+  type ClientListItemApi,
+  type ClientRow,
+} from "@/features/users/clientList";
+import { exportToCSV, generateExportFilename } from "@/lib/export-utils";
 
-function mapKycStatus(apiStatus: string): Client["kycStatus"] {
-  const M: Record<string, Client["kycStatus"]> = {
-    PENDING: "pending",
-    APPROVED: "approved",
-    REJECTED: "rejected",
-  };
-  return M[apiStatus?.toUpperCase()] ?? "pending";
-}
-
-function apiUserToClient(u: {
-  id: string;
-  name: string;
-  email: string;
-  accountId: number;
-  kycStatus: string;
-  walletBalance: number;
-  linkedTradingAccounts: number;
-
-  registrationDate: string;
-  accounts?: any[]; // Add this if needed for type inference
-}): Client {
-  return {
-    id: u.accountId,
-    name: u.name,
-    email: u.email,
-    accountId: u.accountId,
-    kycStatus: mapKycStatus(u.kycStatus),
-    walletBalance: Number(u.walletBalance),
-    linkedAccounts: u.linkedTradingAccounts,
-    linkedTradingAccounts: u.linkedTradingAccounts,
-    registrationDate: u.registrationDate,
-    accounts: u.accounts ?? [], // Provide a default empty array if not present
-  };
-}
+const usd = (n: number) =>
+  n.toLocaleString("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 });
 
 const Clients = () => {
   const navigate = useNavigate();
-  const [selectedClients, setSelectedClients] = useState<number[]>([]);
-  const [searchQuery, setSearchQuery] = useState("");
-  const [filters, setFilters] = useState({
-    kycStatus: "all",
-    registrationDate: "all",
-    accountType: "all",
+  const [filters, setFilters] = useState<ClientFilters>(DEFAULT_CLIENT_FILTERS);
+  const [banTarget, setBanTarget] = useState<ClientRow | null>(null);
+  const [setUserActive, { isLoading: isBanning }] = useSetUserActiveMutation();
+
+  const confirmToggle = async () => {
+    if (!banTarget) return;
+    const ban = banTarget.isActive;
+    try {
+      await setUserActive({ userId: banTarget.id, isActive: !ban }).unwrap();
+      toast.success(ban ? `${banTarget.name} has been banned` : `${banTarget.name} has been unbanned`);
+      setBanTarget(null);
+    } catch (err) {
+      toast.error(
+        (err as { data?: { message?: string } })?.data?.message ||
+          (ban ? "Could not ban the client" : "Could not unban the client")
+      );
+    }
+  };
+
+  // Every client, all pages walked: filters and sorts need the whole list.
+  const { data, isLoading, isError, error, refetch } = useGetAllUsersQuery(undefined, {
+    pollingInterval: 30_000,
+    refetchOnFocus: true,
   });
 
-  // Fetch from API (first page; adjust if you add pagination UI)
-  const { data, isLoading, isFetching, isError, error, refetch } =
-    useListUsersQuery(
-      { page: 1, limit: 50 },
-      {
-        pollingInterval: 5000, // auto-update every 5s
-        refetchOnFocus: true,
-        refetchOnReconnect: true,
-        refetchOnMountOrArgChange: true,
-      }
-    );
-
-  const mapped = useMemo(
-    () =>
-      (
-        (data?.results ?? []) as unknown as Array<
-          Parameters<typeof apiUserToClient>[0]
-        >
-      ).map(apiUserToClient),
+  const rows: ClientRow[] = useMemo(
+    () => ((data ?? []) as unknown as ClientListItemApi[]).map(toClientRow),
     [data]
   );
-  const [clients, setClients] = useState<Client[]>(mapped);
+  const visible = useMemo(() => applyClientFilters(rows, filters), [rows, filters]);
+  const accountTypes = useMemo(
+    () => Array.from(new Set(rows.flatMap((r) => r.accountTypes))).sort(),
+    [rows]
+  );
 
-  useEffect(() => {
-    setClients(mapped);
-  }, [mapped]);
+  const sum = (list: ClientRow[], k: "totalDeposits" | "totalWithdrawals" | "totalBalance") =>
+    list.reduce((s, r) => s + r[k], 0);
+  const funded = rows.filter((r) => r.totalDeposits > 0);
+  const tiles: { label: string; value: string; hint: string; icon: LucideIcon; tone: string }[] = [
+    { label: "Total clients", value: String(rows.length), hint: `${rows.filter((r) => r.isActive).length} active`, icon: Users, tone: "bg-primary/10 text-primary" },
+    { label: "KYC approved", value: String(rows.filter((r) => r.kycStatus === "approved").length), hint: `${rows.filter((r) => r.kycStatus === "pending").length} pending`, icon: ShieldCheck, tone: "bg-emerald-100 text-emerald-600" },
+    { label: "Funded clients", value: String(funded.length), hint: `${rows.length - funded.length} never deposited`, icon: Wallet, tone: "bg-blue-100 text-blue-600" },
+    { label: "Total deposited", value: usd(sum(rows, "totalDeposits")), hint: `${usd(sum(rows, "totalWithdrawals"))} withdrawn`, icon: ArrowDownLeft, tone: "bg-amber-100 text-amber-600" },
+  ];
 
-  const handleViewClient = (client: Client) => {
-    const id = client.id ?? String(client.accountId);
-    navigate(`/clients/${id}`);
-  };
-
-  const handleSelectClient = (clientId: number) => {
-    setSelectedClients((prev) =>
-      prev.includes(clientId)
-        ? prev.filter((id) => id !== clientId)
-        : [...prev, clientId]
-    );
-  };
-
-  const handleSelectAllClients = (checked: boolean) => {
-    setSelectedClients(checked ? filteredClients.map((c) => c.id) : []);
-  };
-
-  const handleBulkAction = (action: string) => {
-    console.log(`Bulk action: ${action} for clients:`, selectedClients);
-    setSelectedClients([]);
-  };
-
-  // Filter clients based on search and filters
-  const filteredClients = clients.filter((client) => {
-    const matchesSearch =
-      searchQuery === "" ||
-      client.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      client.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      String(client.accountId)
-        .toLowerCase()
-        .includes(searchQuery.toLowerCase());
-
-    const matchesKyc =
-      filters.kycStatus === "all" || client.kycStatus === filters.kycStatus;
-
-    return matchesSearch && matchesKyc;
-  });
+  const exportCsv = () =>
+    exportToCSV({
+      headers: [
+        "ID", "Name", "Email", "Phone", "KYC", "Status", "Trading accounts", "Active accounts",
+        "Account types", "Wallet (USD)", "Crypto wallet (USD)", "Trading (USD)", "Total balance (USD)",
+        "Deposited (USD)", "Withdrawn (USD)", "Net (USD)", "Joined",
+      ],
+      rows: visible.map((c) => [
+        c.id, c.name, c.email, c.phone ?? "", c.kycStatus, c.isActive ? "active" : "disabled",
+        c.accounts, c.activeAccounts, c.accountTypes.join(" / "), c.walletBalance, c.cryptoBalance,
+        c.tradingBalance, c.totalBalance, c.totalDeposits, c.totalWithdrawals, c.netDeposits,
+        c.registeredAt,
+      ]),
+      filename: generateExportFilename("clients"),
+    });
 
   return (
     <DashboardLayout title="Clients">
-      <div className="space-y-6">
-        <ClientsHeader
-          searchQuery={searchQuery}
-          onSearchChange={setSearchQuery}
-        />
+      <div className="space-y-5">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <h1 className="text-2xl font-bold text-foreground">Clients</h1>
+            <p className="text-sm text-muted-foreground">
+              Every client with their KYC, trading accounts, balances and funding.
+            </p>
+          </div>
+          <Button variant="outline" onClick={exportCsv} disabled={visible.length === 0} className="gap-2">
+            <Download className="h-4 w-4" />
+            Export {visible.length !== rows.length ? `${visible.length} ` : ""}to CSV
+          </Button>
+        </div>
 
-        <ClientsFilters
-          filters={filters}
-          onFiltersChange={setFilters}
-          selectedCount={selectedClients.length}
-          onBulkAction={handleBulkAction}
-        />
+        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+          {tiles.map((t) => (
+            <div key={t.label} className="flex items-center gap-3 rounded-xl border bg-card p-3">
+              <div className={`rounded-lg p-2 ${t.tone}`}><t.icon className="h-4 w-4" /></div>
+              <div className="min-w-0">
+                <p className="truncate text-lg font-bold leading-tight">{t.value}</p>
+                <p className="truncate text-[11px] text-muted-foreground">{t.label} · {t.hint}</p>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        <ClientsToolbar filters={filters} onChange={setFilters} accountTypes={accountTypes} />
 
         {isError ? (
-          <div className="bg-destructive/10 text-destructive border border-destructive/30 p-4 rounded">
-            Failed to load clients:{" "}
-            {String((error as any)?.status ?? "Unknown error")}
+          <div className="flex items-center justify-between rounded-lg border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive">
+            <span>
+              Failed to load clients: {String((error as { status?: unknown })?.status ?? "Unknown error")}
+            </span>
+            <Button size="sm" variant="outline" onClick={() => refetch()}>Retry</Button>
           </div>
         ) : (
-          <ClientsTable
-            clients={filteredClients}
-            selectedClients={selectedClients}
-            onSelectClient={handleSelectClient}
-            onSelectAll={handleSelectAllClients}
-            onViewClient={handleViewClient}
-          />
+          <>
+            <p className="text-xs text-muted-foreground">
+              Showing {visible.length} of {rows.length} clients
+              {filters.sort !== "newest" && <> · sorted by <span className="font-medium text-foreground">{
+                { oldest: "oldest first", name: "name", accounts: "trading accounts", balance: "balance", deposits: "deposits", withdrawals: "withdrawals", net: "net deposit", newest: "" }[filters.sort]
+              }</span></>}
+            </p>
+            <ClientsTable
+              clients={visible}
+              sort={filters.sort}
+              loading={isLoading}
+              onViewClient={(c) => navigate(`/clients/${c.id}`)}
+              onToggleActive={setBanTarget}
+            />
+          </>
         )}
+
+        <AlertDialog open={banTarget !== null} onOpenChange={(o) => !o && !isBanning && setBanTarget(null)}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>
+                {banTarget?.isActive ? `Ban ${banTarget?.name}?` : `Unban ${banTarget?.name}?`}
+              </AlertDialogTitle>
+              <AlertDialogDescription>
+                {banTarget?.isActive
+                  ? "They will be signed out everywhere and won't be able to log in, use the client portal or log into any trading account until you unban them. Their balances and open positions are not touched."
+                  : "They will be able to log in and use their account and trading accounts again."}
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel disabled={isBanning}>Cancel</AlertDialogCancel>
+              <AlertDialogAction
+                disabled={isBanning}
+                onClick={(e) => {
+                  e.preventDefault();
+                  void confirmToggle();
+                }}
+                className={banTarget?.isActive ? "bg-destructive text-destructive-foreground hover:bg-destructive/90" : ""}
+              >
+                {isBanning ? "Saving…" : banTarget?.isActive ? "Ban client" : "Unban client"}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </div>
     </DashboardLayout>
   );

@@ -1,14 +1,31 @@
 import { useMemo, useState } from "react";
 import { DashboardLayout } from "@/components/DashboardLayout";
-import { WithdrawalsHeader } from "@/components/withdrawals/WithdrawalsHeader";
-import { WithdrawalsFilterTabs } from "@/components/withdrawals/WithdrawalsFilterTabs";
-import { WithdrawalsTable } from "@/components/withdrawals/WithdrawalsTable";
 import { WithdrawalDetailDrawer } from "@/components/withdrawals/WithdrawalDetailDrawer";
 
-import type { DateRange } from "react-day-picker";
-import type { Transaction as ApiTransaction } from "@/features/transactions/transactions.types";
+import type {
+  CryptoTransaction,
+  Transaction as ApiTransaction,
+} from "@/features/transactions/transactions.types";
+import {
+  DEFAULT_FUNDING_FILTERS,
+  applyFundingFilters,
+  fromCrypto,
+  fromManual,
+  type FundingFilters,
+  type FundingRow,
+} from "@/features/transactions/funding";
+import { FundingToolbar } from "@/components/transactions/FundingToolbar";
+import { FundingTable } from "@/components/transactions/FundingTable";
+import { FundingStats } from "@/components/transactions/FundingStats";
+import { CryptoTxDialog } from "@/components/transactions/CryptoTxDialog";
+import { Button } from "@/components/ui/button";
+import { CheckCheck, Loader2 } from "lucide-react";
+import { FundingScopeTabs, type FundingScope } from "@/components/transactions/FundingScopeTabs";
+import { toast } from "sonner";
+import { toNum } from "@/components/transactions/FxAmount";
 import {
   useGetTransactionsQuery,
+  useGetCryptoTransactionsQuery,
   useApproveTransactionMutation,
   useRejectTransactionMutation,
 } from "@/API/transactions.api";
@@ -18,6 +35,8 @@ export interface WithdrawalRequest {
   clientName: string;
   email: string;
   amount: number;
+  inrAmount: number | null;
+  fxRate: number | null;
   type: "referral" | "wallet" | "bank" | "upi";
   destination: string;
   destinationType: "bank" | "upi" | "crypto" | "wallet";
@@ -103,6 +122,8 @@ function mapTransactionToWithdrawal(t: ApiTransaction): WithdrawalRequest {
       `User ${t.userId ?? t.id}`) as string,
     email: (t as any).userEmail ?? (t as any).email ?? "",
     amount: Number(t.amount ?? 0),
+    inrAmount: toNum(t.inrAmount),
+    fxRate: toNum(t.fxRate),
     type: uiType, // <-- will be "referral" for commission rows (if accountIdentifier present)
     destination,
     destinationType: destType as WithdrawalRequest["destinationType"],
@@ -131,218 +152,134 @@ function mapTransactionToWithdrawal(t: ApiTransaction): WithdrawalRequest {
 }
 
 export default function Withdrawals() {
-  const [searchTerm, setSearchTerm] = useState("");
-  const [activeFilter, setActiveFilter] = useState("all");
-  const [selectedWithdrawals, setSelectedWithdrawals] = useState<string[]>([]);
-  const [selectedWithdrawal, setSelectedWithdrawal] =
-    useState<WithdrawalRequest | null>(null);
-  const [dateRange, setDateRange] = useState<DateRange | undefined>();
+  const [filters, setFilters] = useState<FundingFilters>(DEFAULT_FUNDING_FILTERS);
+  const [selected, setSelected] = useState<string[]>([]);
+  const [selectedWithdrawal, setSelectedWithdrawal] = useState<WithdrawalRequest | null>(null);
+  const [selectedCrypto, setSelectedCrypto] = useState<CryptoTransaction | null>(null);
+  const [bulkBusy, setBulkBusy] = useState(false);
+  const [scope, setScope] = useState<FundingScope>("all");
 
-  // Fetch pending transactions from server (this returns all pending if getAllPending: true)
-  const { data: fetched, isLoading } = useGetTransactionsQuery({
-    getAllPending: true,
-  });
+  // The queue only: what is still pending. Settled payouts are on Transaction History.
+  const pendingQ = useGetTransactionsQuery({ getAllPending: true });
+  const cryptoQ = useGetCryptoTransactionsQuery({ action: "WITHDRAW" });
 
-  // Approve / reject mutations for normal transactions
-  const [approveMutation, { isLoading: isApproving }] =
-    useApproveTransactionMutation();
-  const [rejectMutation, { isLoading: isRejecting }] =
-    useRejectTransactionMutation();
+  const [approveMutation] = useApproveTransactionMutation();
+  const [rejectMutation] = useRejectTransactionMutation();
 
-  // normalize fetched -> ApiTransaction[]
-  const apiTxs: ApiTransaction[] = useMemo(() => {
-    // normalize existing fetched (supports either array or { transactions: [] } shape)
-    const txsFromFetched: ApiTransaction[] = (() => {
-      if (!fetched) return [];
-      if (Array.isArray(fetched)) return fetched as ApiTransaction[];
-      const asAny = fetched as any;
-      if (Array.isArray(asAny.transactions))
-        return asAny.transactions as ApiTransaction[];
-      return (asAny as ApiTransaction[]) || [];
-    })();
+  const allRows: FundingRow[] = useMemo(() => {
+    const manual = (pendingQ.data ?? [])
+      .filter((t) => (t.transactionType ?? "").toString().toUpperCase() === "WITHDRAW")
+      .map(fromManual);
+    const crypto = (cryptoQ.data ?? []).map(fromCrypto);
+    return [...manual, ...crypto];
+  }, [pendingQ.data, cryptoQ.data]);
 
-    // dedupe by id
-    const combined = [...txsFromFetched];
-    const seen = new Set<number>();
-    const deduped: ApiTransaction[] = [];
-    for (const t of combined) {
-      const idNum = typeof t?.id === "number" ? t.id : Number(t?.id);
-      if (!Number.isFinite(idNum)) {
-        // fallback: if id is not numeric, still push once
-        if (!deduped.includes(t)) deduped.push(t);
-        continue;
-      }
-      if (!seen.has(idNum)) {
-        seen.add(idNum);
-        deduped.push(t);
-      }
-    }
-    return deduped;
-  }, [fetched]);
+  // Both tabs are the queue: pending only. IB is the same queue narrowed to IB
+  // commission payouts; settled ones of either kind are on Transaction History.
+  const pendingRows = useMemo(() => allRows.filter((r) => r.status === "pending"), [allRows]);
+  const pendingIbRows = useMemo(() => pendingRows.filter((r) => r.isIb), [pendingRows]);
+  const rows = scope === "ib" ? pendingIbRows : pendingRows;
 
-  // keep only withdraw transactions & map to UI shape
-  const withdrawals = useMemo(() => {
-    return apiTxs
-      .filter(
-        (t) => (t.transactionType ?? "").toString().toUpperCase() === "WITHDRAW"
-      )
-      .map(mapTransactionToWithdrawal);
-  }, [apiTxs]);
+  const visible = useMemo(() => applyFundingFilters(rows, filters), [rows, filters]);
 
-  // Apply search, tab and date filters
-  const filteredWithdrawals = useMemo(() => {
-    const term = searchTerm.trim().toLowerCase();
+  const switchScope = (next: FundingScope) => {
+    setScope(next);
+    setSelected([]);
+    setFilters(DEFAULT_FUNDING_FILTERS);
+  };
 
-    return withdrawals.filter((w) => {
-      const matchesSearch =
-        term === "" ||
-        (w.clientName ?? "").toLowerCase().includes(term) ||
-        (w.email ?? "").toLowerCase().includes(term) ||
-        (w.id ?? "").toLowerCase().includes(term) ||
-        ((w.accountIdentifier ?? "") as string).toLowerCase().includes(term) ||
-        (w.destination ?? "").toLowerCase().includes(term);
+  const open = (row: FundingRow) => {
+    if (row.crypto) setSelectedCrypto(row.crypto);
+    else if (row.manual) setSelectedWithdrawal(mapTransactionToWithdrawal(row.manual as ApiTransaction));
+  };
 
-      const matchesFilter = activeFilter === "all" || w.type === activeFilter;
+  const errMsg = (err: unknown, fallback: string) =>
+    (err as { data?: { message?: string } })?.data?.message || fallback;
 
-      const matchesDate =
-        !dateRange ||
-        !dateRange.from ||
-        (() => {
-          const created = new Date(w.submissionDate);
-          const from = dateRange.from ? new Date(dateRange.from) : undefined;
-          const to = dateRange.to ? new Date(dateRange.to) : undefined;
-          if (from && created < new Date(from.setHours(0, 0, 0, 0)))
-            return false;
-          if (to && created > new Date(to.setHours(23, 59, 59, 999)))
-            return false;
-          return true;
-        })();
-
-      return matchesSearch && matchesFilter && matchesDate;
-    });
-  }, [withdrawals, searchTerm, activeFilter, dateRange]);
-
-  /** Approve a single id. */
-  async function approveById(id: string) {
-    try {
-        const res = await (approveMutation as any)({
-          transactionId: Number(id),
-        }).unwrap();
-        return res;
-    } catch (err) {
-      console.error("approveById failed:", err);
-      throw err;
-    }
-  }
-
-  /** Reject a single id. */
-  async function rejectById(id: string, reason?: string) {
-    try {
-      const trimmed = (reason ?? "").toString().trim();
-
-      // guard: do not call backend with empty rejectionReason
-      if (!trimmed) {
-        console.warn("Not calling reject mutation: rejectionReason is empty", {
-          id,
-          reason,
-        });
-        throw new Error("rejectionReason is required (client-side)");
-      }
-
-        const payload = { transactionId: Number(id), rejectionReason: trimmed };
-        console.log("Calling rejectMutation with payload ->", payload);
-
-        const res = await (rejectMutation as any)(payload).unwrap();
-        console.log("Reject response ->", res);
-
-        return res as {
-          rejectionReason?: string;
-          transactionId?: number;
-          status?: string;
-        };
-    } catch (err: any) {
-      console.error(
-        "Reject mutation failed:",
-        err?.data ?? err?.message ?? err
-      );
-      throw err;
-    }
-  }
-
-  // Single approve handler wired to UI
   const handleApprove = async (id: string) => {
     try {
-      await approveById(id);
+      await approveMutation({ transactionId: Number(id) }).unwrap();
+      toast.success("Withdrawal approved");
       setSelectedWithdrawal(null);
-      setSelectedWithdrawals((prev) => prev.filter((x) => x !== id));
-    } catch {}
-  };
-
-  // Single reject handler wired to UI
-  const handleReject = async (id: string, reason?: string) => {
-    try {
-      const res = await rejectById(id, reason);
-      setSelectedWithdrawal((prev) =>
-        prev
-          ? {
-              ...prev,
-              status: "rejected",
-              rejectionReason:
-                (res && (res as any).rejectionReason) ??
-                reason ??
-                prev.rejectionReason,
-            }
-          : null
-      );
-
-      setSelectedWithdrawals((prev) => prev.filter((x) => x !== id));
-    } catch {}
-  };
-
-  // Bulk approve selected (parallel) - approves commissions and normal txs
-  const handleBulkApprove = async () => {
-    if (!selectedWithdrawals.length) return;
-    try {
-      await Promise.all(selectedWithdrawals.map((id) => approveById(id)));
-      setSelectedWithdrawals([]);
-      setSelectedWithdrawal(null);
+      setSelected((prev) => prev.filter((k) => k !== `m-${id}`));
     } catch (err) {
-      console.error("Bulk approve failed", err);
+      toast.error(errMsg(err, "Failed to approve withdrawal"));
     }
   };
 
-  const handleTableStatusUpdate = (
-    id: string,
-    status: "approved" | "pending"
-  ) => {
-    if (status === "approved") {
-      void handleApprove(id);
-    } else if (status === "pending") {
-      console.warn("Setting back to pending not implemented on server.");
+  const handleReject = async (id: string, reason?: string) => {
+    const trimmed = (reason ?? "").trim();
+    if (!trimmed) {
+      toast.error("A rejection reason is required");
+      return;
+    }
+    try {
+      await rejectMutation({ transactionId: Number(id), rejectionReason: trimmed }).unwrap();
+      toast.success("Withdrawal rejected");
+      setSelectedWithdrawal(null);
+      setSelected((prev) => prev.filter((k) => k !== `m-${id}`));
+    } catch (err) {
+      toast.error(errMsg(err, "Failed to reject withdrawal"));
     }
   };
+
+  const handleBulkApprove = async () => {
+    const ids = rows.filter((r) => selected.includes(r.key)).map((r) => r.id);
+    if (!ids.length) return;
+    setBulkBusy(true);
+    const results = await Promise.allSettled(
+      ids.map((id) => approveMutation({ transactionId: id }).unwrap())
+    );
+    setBulkBusy(false);
+    const failed = results.filter((r) => r.status === "rejected").length;
+    if (failed) toast.error(`${ids.length - failed} approved, ${failed} failed`);
+    else toast.success(`${ids.length} withdrawals approved`);
+    setSelected([]);
+  };
+
+  const loading = pendingQ.isLoading || cryptoQ.isLoading;
 
   return (
     <DashboardLayout title="Withdrawals">
-      <div className="space-y-6">
-        <WithdrawalsHeader
-          searchTerm={searchTerm}
-          onSearchChange={setSearchTerm}
-          selectedCount={selectedWithdrawals.length}
-          onBulkAction={handleBulkApprove}
+      <div className="space-y-5">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <h1 className="text-2xl font-bold text-foreground">Withdrawals</h1>
+            <p className="text-sm text-muted-foreground">
+              Pending bank and UPI payouts to approve, and crypto payouts CoinsBuy is still sending. Settled payouts are in Transaction History.
+            </p>
+          </div>
+          {selected.length > 0 && (
+            <Button onClick={handleBulkApprove} disabled={bulkBusy} className="gap-2">
+              {bulkBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCheck className="h-4 w-4" />}
+              Approve {selected.length} selected
+            </Button>
+          )}
+        </div>
+
+        <FundingScopeTabs
+          scope={scope}
+          onChange={switchScope}
+          counts={{ all: pendingRows.length, ib: pendingIbRows.length }}
+          tone="pending"
         />
 
-        <WithdrawalsFilterTabs
-          activeFilter={activeFilter}
-          onFilterChange={setActiveFilter}
+        <FundingStats rows={rows} variant="pending" />
+
+        <FundingToolbar
+          rows={rows}
+          filters={filters}
+          onChange={setFilters}
+          statuses={["pending"]}
         />
 
-        <WithdrawalsTable
-          withdrawals={filteredWithdrawals}
-          selectedWithdrawals={selectedWithdrawals}
-          onSelectionChange={setSelectedWithdrawals}
-          onViewWithdrawal={(w) => setSelectedWithdrawal(w)}
-          onStatusUpdate={handleTableStatusUpdate}
+        <FundingTable
+          rows={visible}
+          loading={loading}
+          error={pendingQ.isError || cryptoQ.isError}
+          onOpen={open}
+          selected={selected}
+          onSelectedChange={setSelected}
         />
 
         <WithdrawalDetailDrawer
@@ -353,6 +290,7 @@ export default function Withdrawals() {
             else if (status === "rejected") handleReject(id, notes);
           }}
         />
+        <CryptoTxDialog tx={selectedCrypto} onClose={() => setSelectedCrypto(null)} />
       </div>
     </DashboardLayout>
   );

@@ -1,6 +1,7 @@
 // src/services/axiosInstance.ts
 import axios from "axios";
 import type { AxiosError, InternalAxiosRequestConfig } from "axios";
+import { endSession } from "@/lib/session";
 
 /**
  * Session model, shared with the backend's token.service:
@@ -12,11 +13,14 @@ import type { AxiosError, InternalAxiosRequestConfig } from "axios";
  *    one's expiry - it does not restart the day.
  *
  * So this client refreshes the access token silently for a day and then, when
- * /broker/auth/refresh-tokens refuses, signs the broker out. An expired access
+ * /broker/auth/refresh-tokens refuses, ends the session through lib/session's
+ * endSession, the one exit every part of the panel uses. An expired access
  * token on its own is never a reason to log out.
  */
 export const ACCESS_TOKEN_KEY = "token";
 export const REFRESH_TOKEN_KEY = "refreshToken";
+
+const LOGIN_URL = "/broker/auth/login";
 
 export const isTokenExpired = (token: string | null): boolean => {
   if (!token) return true;
@@ -35,14 +39,18 @@ export const isTokenExpired = (token: string | null): boolean => {
   return false;
 };
 
+const readRefreshToken = (): string | null => {
+  try {
+    return localStorage.getItem(REFRESH_TOKEN_KEY);
+  } catch {
+    return null;
+  }
+};
+
 /** True while the refresh token can still be redeemed, i.e. within the 24 hours. */
 export const hasLiveSession = (): boolean => {
-  try {
-    const refreshToken = localStorage.getItem(REFRESH_TOKEN_KEY);
-    return !!refreshToken && !isTokenExpired(refreshToken);
-  } catch {
-    return false;
-  }
+  const refreshToken = readRefreshToken();
+  return !!refreshToken && !isTokenExpired(refreshToken);
 };
 
 export const storeTokens = (tokens: {
@@ -51,25 +59,6 @@ export const storeTokens = (tokens: {
 }) => {
   if (tokens?.access?.token) localStorage.setItem(ACCESS_TOKEN_KEY, tokens.access.token);
   if (tokens?.refresh?.token) localStorage.setItem(REFRESH_TOKEN_KEY, tokens.refresh.token);
-};
-
-const clearSession = () => {
-  try {
-    localStorage.clear();
-  } catch {
-    // ignore
-  }
-};
-
-const redirectToLogin = () => {
-  if (typeof window !== "undefined" && window.location.pathname !== "/login") {
-    window.location.href = "/login";
-  }
-};
-
-const endSession = () => {
-  clearSession();
-  redirectToLogin();
 };
 
 // A bare client with no interceptors, so a refresh can never trigger another
@@ -97,12 +86,7 @@ export const refreshAccessToken = (): Promise<string | null> => {
 };
 
 const doRefresh = async (): Promise<string | null> => {
-  let refreshToken: string | null = null;
-  try {
-    refreshToken = localStorage.getItem(REFRESH_TOKEN_KEY);
-  } catch {
-    return null;
-  }
+  const refreshToken = readRefreshToken();
   if (!refreshToken || isTokenExpired(refreshToken)) return null;
   try {
     const { data } = await bare.post("/broker/auth/refresh-tokens", { refreshToken });
@@ -110,8 +94,26 @@ const doRefresh = async (): Promise<string | null> => {
     storeTokens(data);
     return data.access.token as string;
   } catch {
+    // Another tab may have redeemed this refresh token first - the backend
+    // deletes it on use - and stored the pair it got back. That is a rotation,
+    // not the end of the session: use what the other tab stored.
+    const rotated = readRefreshToken();
+    if (rotated && rotated !== refreshToken && !isTokenExpired(rotated)) {
+      const access = localStorage.getItem(ACCESS_TOKEN_KEY);
+      if (access && !isTokenExpired(access)) return access;
+    }
     return null;
   }
+};
+
+/**
+ * The access token to put on a request or a socket, renewed first if it has
+ * run out. Null means the session is over and the caller should end it.
+ */
+export const freshAccessToken = async (): Promise<string | null> => {
+  const token = localStorage.getItem(ACCESS_TOKEN_KEY);
+  if (!token) return null;
+  return isTokenExpired(token) ? refreshAccessToken() : token;
 };
 
 const api = axios.create({
@@ -126,7 +128,7 @@ api.interceptors.request.use(
     if (token && isTokenExpired(token)) {
       token = await refreshAccessToken();
       if (!token) {
-        endSession();
+        endSession("expired");
         return Promise.reject(new axios.Cancel("Session expired"));
       }
     }
@@ -149,7 +151,8 @@ type RetriableConfig = InternalAxiosRequestConfig & { _retried?: boolean };
 
 // Response interceptor: a 401 the clock did not predict (the backend's view of
 // expiry wins, or the broker was disabled) gets one refresh-and-retry. If that
-// fails too, the session is over.
+// fails too, the session is over. Not the login call itself: there a 401 is a
+// wrong password, shown on the form.
 api.interceptors.response.use(
   (response) => response,
   async (error: AxiosError) => {
@@ -158,9 +161,7 @@ api.interceptors.response.use(
 
     const original = error.config as RetriableConfig | undefined;
     const url = original?.url ?? "";
-
-    // A wrong password is not a dead session.
-    if (url.includes("/broker/auth/login")) return Promise.reject(error);
+    if (url.includes(LOGIN_URL)) return Promise.reject(error);
 
     if (original && !original._retried) {
       const token = await refreshAccessToken();
@@ -171,7 +172,7 @@ api.interceptors.response.use(
       }
     }
 
-    endSession();
+    endSession("unauthorized");
     return Promise.reject(error);
   }
 );

@@ -4,22 +4,17 @@ import {
   useUpdateProgrammeMutation,
   useGetTiersQuery,
   useGetAllPartnersQuery,
-  useGetPartnerByIdQuery,
   useCreateTierMutation,
   useUpdateTierMutation,
   useDeleteTierMutation,
   useGetTierRatesQuery,
   usePublishTierRatesMutation,
-  useManualTierOverrideMutation,
-  useAssignManagerMutation,
-  useTogglePayoutHoldMutation,
-  useSuspendPartnerMutation,
   IbTier,
-  IbPartnerItem,
   IbAccountTypeOption,
   ibAdminApi,
 } from "@/API/ibAdmin.api";
 import { DashboardLayout } from "@/components/DashboardLayout";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -141,7 +136,13 @@ const graceToForm = (cycles?: number) =>
 const FORM_TO_GRACE: Record<string, number> = { none: 0, "1 cycle": 1, "2 cycles": 2 };
 
 export default function IBManagement() {
-  const [activeTab, setActiveTab] = useState<"tiers" | "partners">("tiers");
+  const navigate = useNavigate();
+  // ?tab=partners comes back from a partner's page; ?rates=<tierId> opens that
+  // tier's rate card (the partner page's "View rate plan").
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [activeTab, setActiveTab] = useState<"tiers" | "partners">(
+    searchParams.get("tab") === "partners" ? "partners" : "tiers"
+  );
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("ALL");
   const [tierFilter, setTierFilter] = useState("ALL");
@@ -157,10 +158,6 @@ export default function IBManagement() {
   const [updateTier] = useUpdateTierMutation();
   const [deleteTier] = useDeleteTierMutation();
   const [publishTierRates] = usePublishTierRatesMutation();
-  const [manualOverride] = useManualTierOverrideMutation();
-  const [assignManager] = useAssignManagerMutation();
-  const [togglePayoutHold] = useTogglePayoutHoldMutation();
-  const [suspendPartner] = useSuspendPartnerMutation();
 
   // Tier Modal State
   const [tierModalOpen, setTierModalOpen] = useState(false);
@@ -336,26 +333,6 @@ export default function IBManagement() {
     }
   };
 
-  // Partner Detail Modal State
-  const [partnerModalOpen, setPartnerModalOpen] = useState(false);
-  const [selectedPartner, setSelectedPartner] = useState<IbPartnerItem | null>(null);
-  const [partnerModalTab, setPartnerModalTab] = useState<"overview" | "clients" | "transactions" | "actions">("overview");
-  const [overrideTierId, setOverrideTierId] = useState<number>(0);
-  const [grantBonusCheck, setGrantBonusCheck] = useState(false);
-  const [overrideReason, setOverrideReason] = useState("");
-  const [managerInput, setManagerInput] = useState("");
-
-  const [showChangeTierInline, setShowChangeTierInline] = useState(false);
-  const [showLedgerDrawer, setShowLedgerDrawer] = useState(false);
-  const [showAllClientsDrawer, setShowAllClientsDrawer] = useState(false);
-  const [showAssignManagerInline, setShowAssignManagerInline] = useState(false);
-  const [adminNoteText, setAdminNoteText] = useState("Quarterly account review completed. No commission disputes.");
-
-  const { data: partnerDetailData, isLoading: isPartnerDetailLoading, refetch: refetchPartnerDetail } = useGetPartnerByIdQuery(
-    selectedPartner?.ibUserId ?? 0,
-    { skip: !selectedPartner || !partnerModalOpen }
-  );
-
   const programmeForm = () => {
     const prog = programmeData?.data;
     return {
@@ -484,6 +461,18 @@ export default function IBManagement() {
     setRatesModalOpen(true);
   };
 
+  // Rate card asked for in the URL: open it once the tiers are loaded.
+  const ratesParam = searchParams.get("rates");
+  useEffect(() => {
+    if (!ratesParam || !tiersData?.data) return;
+    const tier = tiersData.data.find((t) => t.id === Number(ratesParam));
+    if (tier) handleOpenManageRates(tier);
+    setSearchParams((prev) => {
+      prev.delete("rates");
+      return prev;
+    }, { replace: true });
+  }, [ratesParam, tiersData]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const handlePublishRates = async () => {
     if (!editingRatesTier) return;
     try {
@@ -524,78 +513,6 @@ export default function IBManagement() {
     }
   };
 
-  const handleManualOverride = async () => {
-    if (!selectedPartner || !overrideTierId) return;
-    try {
-      await manualOverride({
-        ibId: selectedPartner.ibUserId,
-        body: {
-          targetTierId: overrideTierId,
-          grantBonus: grantBonusCheck,
-          reason: overrideReason || "Manual administrative override",
-        },
-      }).unwrap();
-      toast.success("Partner tier override applied");
-      setPartnerModalOpen(false);
-      refetchPartners();
-    } catch (err: any) {
-      toast.error(err?.data?.message || "Unable to apply override. Please try again.");
-    }
-  };
-
-  const [assignManagerMutation] = useAssignManagerMutation();
-  const [togglePayoutHoldMutation] = useTogglePayoutHoldMutation();
-
-  const handleAssignManager = async () => {
-    if (!selectedPartner || !managerInput.trim()) return;
-    try {
-      await assignManagerMutation({
-        ibId: selectedPartner.ibUserId,
-        managerName: managerInput.trim(),
-      }).unwrap();
-      toast.success(`Manager '${managerInput.trim()}' assigned successfully`);
-      refetchPartners();
-      refetchPartnerDetail();
-    } catch (err: any) {
-      toast.error(err?.data?.message || "Unable to assign manager.");
-    }
-  };
-
-  const handleTogglePayoutHold = async () => {
-    if (!selectedPartner) return;
-    const newHoldState = !selectedPartner.payoutHold;
-    try {
-      await togglePayoutHoldMutation({
-        ibId: selectedPartner.ibUserId,
-        hold: newHoldState,
-        reason: newHoldState ? "Administrative payout hold applied" : "Payout hold released",
-      }).unwrap();
-      toast.success(newHoldState ? "Payout hold applied" : "Payout hold released");
-      refetchPartners();
-      refetchPartnerDetail();
-    } catch (err: any) {
-      toast.error(err?.data?.message || "Unable to update payout hold state.");
-    }
-  };
-
-  const handleToggleSuspend = async (partner: IbPartnerItem) => {
-    const actionStr = partner.isSuspended ? "reactivate" : "suspend";
-    if (!confirm(`Are you sure you want to ${actionStr} IB partner ${partner.name}?`)) return;
-    try {
-      await suspendPartner({
-        ibId: partner.ibUserId,
-        suspend: !partner.isSuspended,
-        reason: `Admin ${actionStr} action`,
-      }).unwrap();
-      toast.success(`Partner account updated`);
-      refetchPartners();
-      refetchPartnerDetail();
-    } catch (err: any) {
-      toast.error(err?.data?.message || `Unable to ${actionStr} partner account.`);
-    }
-  };
-
-
   const tiers = tiersData?.data || [];
   const rawPartners = partnersData?.data?.partners || [];
 
@@ -625,6 +542,9 @@ export default function IBManagement() {
   const pendingPayouts = summary?.pendingPayouts ?? rawPartners.reduce((acc, p) => acc + (p.pendingPayout || 0), 0);
   const needsReview =
     summary?.needsReview ?? rawPartners.filter((p) => p.isAtRisk || p.payoutHold || p.isSuspended).length;
+  // The list holds every IB (loaded page by page), so this counts them all.
+  const monthStart = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
+  const newThisMonth = rawPartners.filter((p) => p.joinedAt && new Date(p.joinedAt) >= monthStart).length;
 
   return (
     <DashboardLayout title="IB & Tier Administration">
@@ -865,7 +785,7 @@ export default function IBManagement() {
                 </div>
                 <div className="text-2xl font-bold tracking-tight text-foreground mt-2">{totalPartners}</div>
                 <div className="text-[11px] text-emerald-600 font-semibold mt-1 flex items-center gap-0.5">
-                  <TrendingUp className="h-3 w-3" /> +12 registered this mo
+                  <TrendingUp className="h-3 w-3" /> +{newThisMonth} joined this month
                 </div>
               </Card>
 
@@ -875,7 +795,9 @@ export default function IBManagement() {
                   <UserCheck className="h-3.5 w-3.5 text-emerald-500" /> Active IBs
                 </div>
                 <div className="text-2xl font-bold tracking-tight text-foreground mt-2">{activePartners}</div>
-                <div className="text-[11px] text-emerald-600 font-semibold mt-1">79% active engagement</div>
+                <div className="text-[11px] text-emerald-600 font-semibold mt-1">
+                  {totalPartners > 0 ? Math.round((activePartners / totalPartners) * 100) : 0}% not suspended
+                </div>
               </Card>
 
               <Card className="p-4 border-border/60 shadow-sm relative overflow-hidden bg-card hover:shadow-md transition-all">
@@ -884,7 +806,7 @@ export default function IBManagement() {
                   <BarChart3 className="h-3.5 w-3.5 text-blue-500" /> MTD Lot Volume
                 </div>
                 <div className="text-2xl font-bold tracking-tight text-foreground mt-2">{mtdVolume.toLocaleString()}</div>
-                <div className="text-[11px] text-blue-600 font-semibold mt-1">+8.4% vs previous month</div>
+                <div className="text-[11px] text-blue-600 font-semibold mt-1">Closed lots, current evaluation period</div>
               </Card>
 
               <Card className="p-4 border-border/60 shadow-sm relative overflow-hidden bg-card hover:shadow-md transition-all">
@@ -893,7 +815,7 @@ export default function IBManagement() {
                   <DollarSign className="h-3.5 w-3.5 text-purple-500" /> Pending Payouts
                 </div>
                 <div className="text-2xl font-bold tracking-tight text-foreground mt-2">${pendingPayouts.toLocaleString()}</div>
-                <div className="text-[11px] text-muted-foreground font-medium mt-1">Next payout: 15th Sep</div>
+                <div className="text-[11px] text-muted-foreground font-medium mt-1">Commission not yet paid to IB wallets</div>
               </Card>
 
               <Card className="p-4 border-border/60 shadow-sm relative overflow-hidden bg-card hover:shadow-md transition-all">
@@ -968,7 +890,7 @@ export default function IBManagement() {
                         <TableHead className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider py-2.5 px-3">Assigned Tier</TableHead>
                         <TableHead className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider py-2.5 px-3 text-right">Active Clients</TableHead>
                         <TableHead className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider py-2.5 px-3 text-right">MTD Volume</TableHead>
-                        <TableHead className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider py-2.5 px-3 text-right">MTD Earnings</TableHead>
+                        <TableHead className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider py-2.5 px-3 text-right">Total Earned</TableHead>
                         <TableHead className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider py-2.5 px-3 text-right">Pending Payout</TableHead>
                         <TableHead className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider py-2.5 px-3">Account Manager</TableHead>
                         <TableHead className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider py-2.5 px-3 text-right">Actions</TableHead>
@@ -1050,11 +972,7 @@ export default function IBManagement() {
                             <Button
                               variant="outline"
                               size="sm"
-                              onClick={() => {
-                                setSelectedPartner(partner);
-                                setOverrideTierId(0);
-                                setPartnerModalOpen(true);
-                              }}
+                              onClick={() => navigate(`/ib-management/partners/${partner.ibUserId}`)}
                               className="h-7 px-2.5 text-[11px] font-semibold gap-1 border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-200 bg-slate-100 dark:bg-slate-800/80 hover:bg-slate-900 hover:text-white dark:hover:bg-slate-100 dark:hover:text-slate-900 transition-all duration-200 shadow-sm"
                             >
                               <Eye className="h-3 w-3" />
@@ -1727,443 +1645,6 @@ export default function IBManagement() {
               <Zap className="h-3.5 w-3.5" /> Publish New Rate Card
             </Button>
           </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* DIALOG 3: IB PARTNER DETAIL MODAL (HTML PROTOTYPE MATCH) */}
-      <Dialog open={partnerModalOpen} onOpenChange={setPartnerModalOpen}>
-        <DialogContent className="max-w-4xl max-h-[92vh] overflow-y-auto border-border/80 shadow-2xl p-0 gap-0 rounded-2xl bg-card">
-          {selectedPartner && (
-            <>
-              {/* Header matching HTML reference */}
-              <div className="flex items-start justify-between gap-4 p-5 sm:p-6 border-b border-border/60 bg-muted/20 sticky top-0 backdrop-blur-md z-10">
-                <div>
-                  <h2 className="text-xl font-bold text-foreground tracking-tight">{selectedPartner.name}</h2>
-                  <p className="text-xs text-muted-foreground mt-0.5 font-medium">
-                    IB-{selectedPartner.ibUserId + 10000} · {selectedPartner.currentTier} · {selectedPartner.isSuspended ? "Suspended" : "Active"}
-                  </p>
-                </div>
-              </div>
-
-              {/* Body - detail-grid matching HTML prototype */}
-              <div className="p-5 sm:p-6 space-y-5">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-
-                  {/* Card 1: Identity and compliance */}
-                  <div className="border border-border/70 rounded-xl p-4 sm:p-5 bg-card shadow-sm space-y-3">
-                    <h3 className="text-sm font-bold text-foreground">Identity and compliance</h3>
-                    <div className="grid grid-cols-2 gap-x-4 gap-y-3 pt-1 text-xs">
-                      <div>
-                        <span className="block text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-0.5">Email</span>
-                        <strong className="text-foreground font-semibold break-all">{selectedPartner.email}</strong>
-                      </div>
-                      <div>
-                        <span className="block text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-0.5">Phone</span>
-                        <strong className="text-foreground font-semibold">
-                          {partnerDetailData?.data?.user?.phoneNumber || "+91 ••••• 48210"}
-                        </strong>
-                      </div>
-                      <div>
-                        <span className="block text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-0.5">Country</span>
-                        <strong className="text-foreground font-semibold">
-                          {partnerDetailData?.data?.user?.country || "India"}
-                        </strong>
-                      </div>
-                      <div>
-                        <span className="block text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-0.5">Joined</span>
-                        <strong className="text-foreground font-semibold">
-                          {selectedPartner.joinedAt
-                            ? new Date(selectedPartner.joinedAt).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" })
-                            : "12 January 2026"}
-                        </strong>
-                      </div>
-                      <div>
-                        <span className="block text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-0.5">KYC</span>
-                        <strong className={partnerDetailData?.data?.user?.isVerified !== false ? "text-emerald-600 font-bold" : "text-amber-600 font-bold"}>
-                          {partnerDetailData?.data?.user?.isVerified !== false ? "Verified" : "Pending Review"}
-                        </strong>
-                      </div>
-                      <div>
-                        <span className="block text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-0.5">IB agreement</span>
-                        <strong className="text-emerald-600 font-bold">Signed</strong>
-                      </div>
-                      <div>
-                        <span className="block text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-0.5">Assigned manager</span>
-                        <strong className="text-foreground font-semibold">
-                          {partnerDetailData?.data?.assignedManager || selectedPartner.assignedManager || "Neha S."}
-                        </strong>
-                      </div>
-                      <div>
-                        <span className="block text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-0.5">Referral code</span>
-                        <strong className="font-mono text-foreground font-bold bg-muted px-1.5 py-0.5 rounded border border-border/40">
-                          {selectedPartner.referralCode || "AARAV482"}
-                        </strong>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Card 2: Tier progress */}
-                  <div className="border border-border/70 rounded-xl p-4 sm:p-5 bg-card shadow-sm space-y-3 flex flex-col justify-between">
-                    <div>
-                      <h3 className="text-sm font-bold text-foreground">Tier progress</h3>
-                      <p className="text-xs text-muted-foreground font-medium mt-0.5">
-                        {selectedPartner.currentTier} → {
-                          selectedPartner.currentTier === "Associate" ? "Partner" :
-                          selectedPartner.currentTier === "Partner" ? "Senior Partner" :
-                          selectedPartner.currentTier === "Senior Partner" ? "Elite" :
-                          selectedPartner.currentTier === "Elite" ? "Director" : "Managing Partner"
-                        }
-                      </p>
-                      <div className="space-y-3 mt-3 text-xs">
-                        <div>
-                          <div className="flex justify-between font-semibold mb-1">
-                            <span className="text-muted-foreground text-[11px] uppercase tracking-wider">Trading volume</span>
-                            <span className="text-foreground font-bold">
-                              {(partnerDetailData?.data?.stats?.totalLots ?? selectedPartner.mtdLots ?? 1842.4).toLocaleString()} / 3,000 lots
-                            </span>
-                          </div>
-                          <div className="h-2 bg-muted rounded-full overflow-hidden">
-                            <div
-                              className="h-full bg-emerald-600 rounded-full transition-all duration-300"
-                              style={{
-                                width: `${Math.min(100, (((partnerDetailData?.data?.stats?.totalLots ?? selectedPartner.mtdLots ?? 1842.4) / 3000) * 100))}%`
-                              }}
-                            />
-                          </div>
-                        </div>
-
-                        <div>
-                          <div className="flex justify-between font-semibold mb-1">
-                            <span className="text-muted-foreground text-[11px] uppercase tracking-wider">Active traders</span>
-                            <span className="text-foreground font-bold">
-                              {partnerDetailData?.data?.stats?.activeClients ?? selectedPartner.activeClients ?? 31} / 30 — requirement met
-                            </span>
-                          </div>
-                          <div className="h-2 bg-muted rounded-full overflow-hidden">
-                            <div
-                              className="h-full bg-emerald-600 rounded-full transition-all duration-300"
-                              style={{ width: "100%" }}
-                            />
-                          </div>
-                        </div>
-                      </div>
-
-                      <div className="mt-3.5 p-3 rounded-lg bg-amber-500/10 text-amber-700 dark:text-amber-300 text-xs font-medium border border-amber-500/20">
-                        Needs {Math.max(0, 3000 - (partnerDetailData?.data?.stats?.totalLots ?? selectedPartner.mtdLots ?? 1842.4)).toFixed(1)} more lots to reach Elite.
-                      </div>
-                    </div>
-
-                    <div className="flex gap-2 pt-2">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => {
-                          const currentTierObj = tiers.find((t) => t.name === selectedPartner?.currentTier);
-                          setOverrideTierId(selectedPartner?.currentTierId || currentTierObj?.id || tiers[0]?.id || 1);
-                          setShowChangeTierInline(!showChangeTierInline);
-                        }}
-                        className="text-xs h-8 px-3 border-border/70 font-semibold"
-                      >
-                        Change tier
-                      </Button>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => {
-                          const matchingTier = tiers.find((t) => t.name === selectedPartner.currentTier) || tiers[0];
-                          if (matchingTier) handleOpenManageRates(matchingTier);
-                        }}
-                        className="text-xs h-8 px-3 border-border/70 font-semibold"
-                      >
-                        View rate plan
-                      </Button>
-                    </div>
-
-                    {showChangeTierInline && (
-                      <div className="mt-3 p-3 border border-border/60 rounded-xl bg-muted/20 space-y-2">
-                        <span className="text-xs font-bold block">Select target tier override:</span>
-                        <div className="flex gap-2">
-                          <Select value={String(overrideTierId)} onValueChange={(v) => setOverrideTierId(Number(v))}>
-                            <SelectTrigger className="text-xs h-8 bg-background">
-                              <SelectValue placeholder="Target tier..." />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {tiers.map((t) => (
-                                <SelectItem key={t.id} value={String(t.id)}>
-                                  {t.name}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                          <Button size="sm" onClick={handleManualOverride} className="text-xs h-8 shrink-0">
-                            Apply
-                          </Button>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Card 3: Performance */}
-                  <div className="border border-border/70 rounded-xl p-4 sm:p-5 bg-card shadow-sm space-y-3">
-                    <h3 className="text-sm font-bold text-foreground">Performance</h3>
-                    <div className="grid grid-cols-2 gap-x-4 gap-y-3 pt-1 text-xs">
-                      <div>
-                        <span className="block text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-0.5">Total referred clients</span>
-                        <strong className="text-foreground text-sm font-bold">
-                          {partnerDetailData?.data?.stats?.totalClients ?? selectedPartner.totalClients ?? 63}
-                        </strong>
-                      </div>
-                      <div>
-                        <span className="block text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-0.5">Active traders</span>
-                        <strong className="text-foreground text-sm font-bold">
-                          {partnerDetailData?.data?.stats?.activeClients ?? selectedPartner.activeClients ?? 31}
-                        </strong>
-                      </div>
-                      <div>
-                        <span className="block text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-0.5">MTD volume</span>
-                        <strong className="text-foreground text-sm font-bold">
-                          {(partnerDetailData?.data?.stats?.totalLots ?? selectedPartner.mtdLots ?? 1842.4).toLocaleString()} lots
-                        </strong>
-                      </div>
-                      <div>
-                        <span className="block text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-0.5">Lifetime volume</span>
-                        <strong className="text-foreground text-sm font-bold">
-                          {((partnerDetailData?.data?.stats?.totalLots ?? selectedPartner.mtdLots ?? 1842.4) * 6.9).toFixed(1)} lots
-                        </strong>
-                      </div>
-                      <div>
-                        <span className="block text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-0.5">Referral clicks</span>
-                        <strong className="text-foreground text-sm font-bold">1,284</strong>
-                      </div>
-                      <div>
-                        <span className="block text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-0.5">Registration conversion</span>
-                        <strong className="text-foreground text-sm font-bold">18.2%</strong>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Card 4: Commissions and payouts */}
-                  <div className="border border-border/70 rounded-xl p-4 sm:p-5 bg-card shadow-sm space-y-3 flex flex-col justify-between">
-                    <div>
-                      <h3 className="text-sm font-bold text-foreground">Commissions and payouts</h3>
-                      <div className="grid grid-cols-2 gap-x-4 gap-y-3 pt-1 text-xs">
-                        <div>
-                          <span className="block text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-0.5">MTD commission</span>
-                          <strong className="text-foreground text-sm font-bold">
-                            ${(partnerDetailData?.data?.stats?.mtdCommission ?? selectedPartner.mtdCommission ?? 14906).toLocaleString()}
-                          </strong>
-                        </div>
-                        <div>
-                          <span className="block text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-0.5">Pending payout</span>
-                          <strong className="text-foreground text-sm font-bold">
-                            ${(partnerDetailData?.data?.stats?.pendingPayout ?? selectedPartner.pendingPayout ?? 6240).toLocaleString()}
-                          </strong>
-                        </div>
-                        <div>
-                          <span className="block text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-0.5">Lifetime paid</span>
-                          <strong className="text-foreground text-sm font-bold">$82,416</strong>
-                        </div>
-                        <div>
-                          <span className="block text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-0.5">Next payout</span>
-                          <strong className="text-foreground font-semibold">15 September 2026</strong>
-                        </div>
-                        <div>
-                          <span className="block text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-0.5">Payout method</span>
-                          <strong className="text-foreground font-semibold">USDT · TRC20</strong>
-                        </div>
-                        <div>
-                          <span className="block text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-0.5">Payout status</span>
-                          <strong className={selectedPartner.payoutHold ? "text-rose-600 font-bold" : "text-emerald-600 font-bold"}>
-                            {selectedPartner.payoutHold ? "On Hold" : "Enabled"}
-                          </strong>
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="flex gap-2 pt-2">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => setShowLedgerDrawer(!showLedgerDrawer)}
-                        className="text-xs h-8 px-3 border-border/70 font-semibold"
-                      >
-                        {showLedgerDrawer ? "Hide ledger" : "View ledger"}
-                      </Button>
-                      <Button
-                        variant={selectedPartner.payoutHold ? "default" : "outline"}
-                        size="sm"
-                        onClick={handleTogglePayoutHold}
-                        className="text-xs h-8 px-3 border-border/70 font-semibold"
-                      >
-                        {selectedPartner.payoutHold ? "Release payout" : "Hold payout"}
-                      </Button>
-                    </div>
-                  </div>
-
-                  {/* Ledger Drawer */}
-                  {showLedgerDrawer && (
-                    <div className="col-span-full border border-border/70 rounded-xl p-4 bg-muted/10 space-y-3">
-                      <h4 className="text-xs font-bold text-foreground">Commission Transactions & Ledger</h4>
-                      {!partnerDetailData?.data?.ledgers || partnerDetailData.data.ledgers.length === 0 ? (
-                        <p className="text-xs text-muted-foreground">No ledger transactions recorded yet.</p>
-                      ) : (
-                        <div className="overflow-x-auto border border-border/60 rounded-lg">
-                          <Table>
-                            <TableHeader className="bg-muted/40">
-                              <TableRow>
-                                <TableHead className="text-[11px] py-1.5 font-semibold">Symbol</TableHead>
-                                <TableHead className="text-[11px] py-1.5 font-semibold">Account</TableHead>
-                                <TableHead className="text-[11px] py-1.5 font-semibold text-right">Closed Lots</TableHead>
-                                <TableHead className="text-[11px] py-1.5 font-semibold text-right">Amount ($)</TableHead>
-                                <TableHead className="text-[11px] py-1.5 font-semibold">State</TableHead>
-                              </TableRow>
-                            </TableHeader>
-                            <TableBody>
-                              {partnerDetailData.data.ledgers.map((lg: any) => (
-                                <TableRow key={lg.id} className="text-xs">
-                                  <TableCell className="py-1.5 font-bold">{lg.symbol}</TableCell>
-                                  <TableCell className="py-1.5 text-muted-foreground">{lg.accountType}</TableCell>
-                                  <TableCell className="py-1.5 text-right font-semibold">{lg.closedLots}</TableCell>
-                                  <TableCell className="py-1.5 text-right font-bold text-emerald-600">${lg.amount}</TableCell>
-                                  <TableCell className="py-1.5">
-                                    <span className="px-1.5 py-0.5 rounded text-[10px] bg-emerald-500/10 text-emerald-600 font-semibold">
-                                      {lg.state}
-                                    </span>
-                                  </TableCell>
-                                </TableRow>
-                              ))}
-                            </TableBody>
-                          </Table>
-                        </div>
-                      )}
-                    </div>
-                  )}
-
-                  {/* Card 5: Recently referred clients (Wide section) */}
-                  <div className="col-span-full border border-border/70 rounded-xl p-4 sm:p-5 bg-card shadow-sm space-y-3">
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                      <div>
-                        <h3 className="text-sm font-bold text-foreground">Recently referred clients</h3>
-                        <p className="text-xs text-muted-foreground">Latest activity from clients connected to this IB.</p>
-                      </div>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => setShowAllClientsDrawer(!showAllClientsDrawer)}
-                        className="text-xs h-8 px-3 border-border/70 font-semibold self-start sm:self-auto"
-                      >
-                        {showAllClientsDrawer ? "Collapse list" : "View all clients"}
-                      </Button>
-                    </div>
-
-                    <div className="overflow-x-auto border border-border/60 rounded-xl">
-                      <Table>
-                        <TableHeader className="bg-muted/30">
-                          <TableRow>
-                            <TableHead className="text-[11px] font-semibold py-2">Client</TableHead>
-                            <TableHead className="text-[11px] font-semibold py-2">Account type</TableHead>
-                            <TableHead className="text-[11px] font-semibold py-2">KYC</TableHead>
-                            <TableHead className="text-[11px] font-semibold py-2 text-right">MTD lots</TableHead>
-                            <TableHead className="text-[11px] font-semibold py-2 text-right">Commission generated</TableHead>
-                            <TableHead className="text-[11px] font-semibold py-2">Last trade</TableHead>
-                          </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                          {partnerDetailData?.data?.referredClients && partnerDetailData.data.referredClients.length > 0 ? (
-                            partnerDetailData.data.referredClients
-                              .slice(0, showAllClientsDrawer ? undefined : 3)
-                              .map((client: any) => (
-                                <TableRow key={client.clientId} className="text-xs hover:bg-muted/30">
-                                  <TableCell className="py-2.5">
-                                    <div className="font-bold text-foreground">{client.name}</div>
-                                    <div className="text-[11px] text-muted-foreground font-mono">{client.clientId}</div>
-                                  </TableCell>
-                                  <TableCell className="py-2.5 text-muted-foreground font-medium">
-                                    {client.accountTypes?.length ? client.accountTypes.join(", ") : "—"}
-                                  </TableCell>
-                                  <TableCell className="py-2.5">
-                                    <Badge variant="outline" className="text-[10px] bg-emerald-500/10 text-emerald-600 border-emerald-500/20 font-semibold">
-                                      Verified
-                                    </Badge>
-                                  </TableCell>
-                                  <TableCell className="py-2.5 text-right font-semibold text-foreground">
-                                    {client.totalLots || "0.0"}
-                                  </TableCell>
-                                  <TableCell className="py-2.5 text-right font-bold text-emerald-600">
-                                    ${(client.commissionGenerated || 0).toLocaleString()}
-                                  </TableCell>
-                                  <TableCell className="py-2.5 text-muted-foreground">Today</TableCell>
-                                </TableRow>
-                              ))
-                          ) : (
-                            <TableRow>
-                              <TableCell colSpan={6} className="py-6 text-center text-xs text-muted-foreground">
-                                No referred clients yet
-                              </TableCell>
-                            </TableRow>
-                          )}
-                        </TableBody>
-                      </Table>
-                    </div>
-                  </div>
-
-                  {/* Card 6: Internal admin notes (Wide section) */}
-                  <div className="col-span-full border border-border/70 rounded-xl p-4 sm:p-5 bg-card shadow-sm space-y-3">
-                    <h3 className="text-sm font-bold text-foreground">Internal admin notes</h3>
-                    <textarea
-                      className="w-full min-h-[76px] p-3 text-xs border border-border/70 rounded-lg bg-background text-foreground focus:outline-none focus:ring-1 focus:ring-primary resize-y font-medium"
-                      placeholder="Add a note visible only to administrators..."
-                      value={adminNoteText}
-                      onChange={(e) => setAdminNoteText(e.target.value)}
-                    />
-                    <div className="flex flex-wrap gap-2 pt-1">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => toast.success("Admin note saved")}
-                        className="text-xs h-8 px-3 border-border/70 font-semibold"
-                      >
-                        Save note
-                      </Button>
-
-                      {showAssignManagerInline ? (
-                        <div className="flex items-center gap-2">
-                          <Input
-                            placeholder="Manager name..."
-                            value={managerInput}
-                            onChange={(e) => setManagerInput(e.target.value)}
-                            className="text-xs h-8 w-44 bg-background"
-                          />
-                          <Button size="sm" onClick={handleAssignManager} className="text-xs h-8 px-3">
-                            Confirm
-                          </Button>
-                        </div>
-                      ) : (
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => setShowAssignManagerInline(true)}
-                          className="text-xs h-8 px-3 border-border/70 font-semibold"
-                        >
-                          Assign manager
-                        </Button>
-                      )}
-
-                      <Button
-                        variant={selectedPartner.isSuspended ? "default" : "destructive"}
-                        size="sm"
-                        onClick={() => handleToggleSuspend(selectedPartner)}
-                        className="text-xs h-8 px-3 font-semibold"
-                      >
-                        {selectedPartner.isSuspended ? "Reactivate IB" : "Suspend IB"}
-                      </Button>
-                    </div>
-                  </div>
-
-                </div>
-              </div>
-            </>
-          )}
         </DialogContent>
       </Dialog>
 

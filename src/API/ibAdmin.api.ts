@@ -1,5 +1,11 @@
 import { baseApi } from "@/API/baseApi";
 import { ENDPOINTS } from "@/constants/apiEndpoints";
+import type {
+  IbLedgerEntry,
+  IbOverviewResponse,
+  IbReferredClient,
+  IbWithdrawal,
+} from "@/features/users/users.types";
 
 export interface IbProgramme {
   id: number;
@@ -85,6 +91,64 @@ export interface IbPartnersPage {
   partners: IbPartnerItem[];
   pagination: { page: number; limit: number; total: number; totalPages: number };
   summary?: IbPartnersSummary;
+}
+
+export interface IbTierRef {
+  id: number;
+  name: string;
+  levelOrder: number;
+  minVolumeLots: number;
+  minActiveTraders: number;
+  qualificationRule: "VOLUME" | "TRADERS" | "BOTH" | string;
+  bonusAmount: number;
+}
+
+/** One IB for the directory's profile dialog. All of it is read from the database. */
+export interface IbPartnerDetail {
+  ibUserId: number;
+  name: string;
+  email: string;
+  phone: string | null;
+  referralCode: string | null;
+  kycStatus: string;
+  accountActive: boolean;
+  joinedAt: string;
+  assignedManager: string | null;
+  payoutHold: boolean;
+  isSuspended: boolean;
+  currentTier: string;
+  currentTierId: number;
+  tierSince: string | null;
+  tierSource: IbOverviewResponse["tierSource"];
+  risk: IbOverviewResponse["risk"];
+  tier: IbTierRef | null;
+  nextTier: IbTierRef | null;
+  /** The running evaluation period: what the next evaluation will look at. */
+  progress: {
+    windowStart: string;
+    windowEnd: string;
+    evaluationMode: string;
+    volumeLots: number;
+    activeTraders: number;
+    activeTraderMinLots: number;
+  } | null;
+  summary: IbOverviewResponse["summary"];
+  lastPayout: IbWithdrawal | null;
+  monthly: IbOverviewResponse["monthly"];
+  referredClients: IbReferredClient[];
+  ledgers: IbLedgerEntry[];
+  withdrawals: IbWithdrawal[];
+  commissionByAccountType: {
+    accountTypeId: string;
+    name: string;
+    isActive: boolean;
+    commission: number;
+    lots: number;
+    trades: number;
+    clients: number;
+    avgPerLot: number;
+  }[];
+  bonusAwards: { id: number; tierName: string; amount: number; state: string; earnedAt: string }[];
 }
 
 /** The backend serves at most this many partners per request. */
@@ -217,7 +281,7 @@ export const ibAdminApi = baseApi.injectEndpoints({
       providesTags: ["IbAdmin"],
     }),
 
-    getPartnerById: build.query<{ success: boolean; data: any }, number>({
+    getPartnerById: build.query<{ success: boolean; data: IbPartnerDetail }, number>({
       query: (ibId) => ({
         url: ENDPOINTS.IB_ADMIN.PARTNER_BY_ID(ibId),
         method: "GET",
@@ -255,7 +319,28 @@ export const ibAdminApi = baseApi.injectEndpoints({
         method: "POST",
         data: { hold, reason },
       }),
-      invalidatesTags: ["IbAdmin"],
+      // Flip the button now; the refetch after the tags confirms it.
+      async onQueryStarted({ ibId, hold }, { dispatch, queryFulfilled }) {
+        const patches = [
+          dispatch(
+            ibAdminApi.util.updateQueryData("getPartnerById", ibId, (draft) => {
+              if (draft?.data) draft.data.payoutHold = hold;
+            })
+          ),
+          dispatch(
+            ibAdminApi.util.updateQueryData("getAllPartners", undefined, (draft) => {
+              const p = draft?.data?.partners.find((x) => x.ibUserId === ibId);
+              if (p) p.payoutHold = hold;
+            })
+          ),
+        ];
+        try {
+          await queryFulfilled;
+        } catch {
+          patches.forEach((p) => p.undo());
+        }
+      },
+      invalidatesTags: (_res, _err, { ibId }) => ["IbAdmin", { type: "Users", id: `ib-${ibId}` }],
     }),
 
     suspendPartner: build.mutation<
@@ -267,7 +352,7 @@ export const ibAdminApi = baseApi.injectEndpoints({
         method: "POST",
         data: { suspend, reason },
       }),
-      invalidatesTags: ["IbAdmin"],
+      invalidatesTags: (_res, _err, { ibId }) => ["IbAdmin", { type: "Users", id: `ib-${ibId}` }],
     }),
 
     triggerEvaluation: build.mutation<{ success: boolean; data: any; message: string }, void>({

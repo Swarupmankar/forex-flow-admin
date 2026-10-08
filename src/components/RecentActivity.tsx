@@ -1,103 +1,21 @@
+import { useMemo } from "react";
+import { useNavigate } from "react-router-dom";
+import { format } from "date-fns";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ExternalLink } from "lucide-react";
 import { RecentActivityExport } from "./RecentActivityExport";
+import { useGetTransactionsQuery } from "@/API/transactions.api";
 
 interface ActivityItem {
-  id: string;
+  id: number;
   timestamp: string;
-  action: string;
-  clientName: string;
-  clientId: string;
+  activity: string;
+  client: string;
   status: "approved" | "pending" | "rejected";
-  amount?: string;
+  amount: number;
 }
-
-const recentActivities: ActivityItem[] = [
-  {
-    id: "1",
-    timestamp: "2024-01-15 14:32",
-    action: "Approved Withdrawal",
-    clientName: "John Smith",
-    clientId: "CL001254",
-    status: "approved",
-    amount: "$2,500"
-  },
-  {
-    id: "2",
-    timestamp: "2024-01-15 14:18",
-    action: "New Deposit",
-    clientName: "Sarah Johnson",
-    clientId: "CL001255",
-    status: "approved",
-    amount: "$10,000"
-  },
-  {
-    id: "3",
-    timestamp: "2024-01-15 13:45",
-    action: "KYC Document Review",
-    clientName: "Michael Brown",
-    clientId: "CL001256",
-    status: "pending"
-  },
-  {
-    id: "4",
-    timestamp: "2024-01-15 13:22",
-    action: "Account Verification",
-    clientName: "Emma Davis",
-    clientId: "CL001257",
-    status: "approved"
-  },
-  {
-    id: "5",
-    timestamp: "2024-01-15 12:58",
-    action: "Withdrawal Request",
-    clientName: "David Wilson",
-    clientId: "CL001258",
-    status: "pending",
-    amount: "$5,750"
-  },
-  {
-    id: "6",
-    timestamp: "2024-01-15 12:33",
-    action: "Failed Deposit",
-    clientName: "Lisa Anderson",
-    clientId: "CL001259",
-    status: "rejected",
-    amount: "$1,200"
-  },
-  {
-    id: "7",
-    timestamp: "2024-01-15 11:47",
-    action: "Account Opening",
-    clientName: "Robert Taylor",
-    clientId: "CL001260",
-    status: "approved"
-  },
-  {
-    id: "8",
-    timestamp: "2024-01-15 11:15",
-    action: "Approved Deposit",
-    clientName: "Jennifer White",
-    clientId: "CL001261",
-    status: "approved",
-    amount: "$7,500"
-  }
-];
-
-const getStatusVariant = (status: ActivityItem["status"]) => {
-  switch (status) {
-    case "approved":
-      return "default";
-    case "pending":
-      return "secondary";
-    case "rejected":
-      return "destructive";
-    default:
-      return "secondary";
-  }
-};
 
 const getStatusColor = (status: ActivityItem["status"]) => {
   switch (status) {
@@ -112,20 +30,54 @@ const getStatusColor = (status: ActivityItem["status"]) => {
   }
 };
 
+const formatCurrency = (amount: number) =>
+  new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: "USD",
+  }).format(amount);
+
 export function RecentActivity() {
-  // Show only first 5 entries for cleaner dashboard view
-  const displayActivities = recentActivities.slice(0, 5);
+  const navigate = useNavigate();
+  const { data, isLoading, isError } = useGetTransactionsQuery({
+    getAllPending: false,
+  });
+
+  // Newest deposits and withdrawals first. The export gets all of them, the
+  // table only the first five.
+  const activities = useMemo<ActivityItem[]>(() => {
+    if (!data) return [];
+    return [...data]
+      .sort(
+        (a, b) =>
+          new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+      )
+      .map((t) => ({
+        id: t.id,
+        timestamp: t.createdAt,
+        activity: t.transactionType === "DEPOSIT" ? "Deposit" : "Withdrawal",
+        client: t.name,
+        status: t.transactionStatus.toLowerCase() as ActivityItem["status"],
+        amount: Number(t.amount) || 0,
+      }));
+  }, [data]);
+
+  const displayActivities = activities.slice(0, 5);
 
   return (
     <Card className="p-6">
       <div className="flex items-center justify-between mb-6">
         <div>
           <h3 className="text-lg font-semibold text-foreground">Recent Activity</h3>
-          <p className="text-sm text-muted-foreground">Latest client actions and status updates</p>
+          <p className="text-sm text-muted-foreground">Latest client deposits and withdrawals</p>
         </div>
         <div className="flex gap-2">
-          <RecentActivityExport activities={recentActivities} />
-          <Button variant="outline" size="sm" className="hover:bg-primary hover:text-primary-foreground">
+          <RecentActivityExport activities={activities} />
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => navigate("/deposit-history")}
+            className="hover:bg-primary hover:text-primary-foreground"
+          >
             View All
             <ExternalLink className="ml-2 h-4 w-4" />
           </Button>
@@ -139,22 +91,47 @@ export function RecentActivity() {
               <th className="text-left py-4 px-4 text-sm font-semibold text-foreground">Date</th>
               <th className="text-left py-4 px-4 text-sm font-semibold text-foreground">Action</th>
               <th className="text-left py-4 px-4 text-sm font-semibold text-foreground">Client Name</th>
+              <th className="text-left py-4 px-4 text-sm font-semibold text-foreground">Amount</th>
               <th className="text-left py-4 px-4 text-sm font-semibold text-foreground">Status</th>
             </tr>
           </thead>
           <tbody>
+            {isLoading && (
+              <tr>
+                <td colSpan={5} className="py-6 px-4 text-sm text-muted-foreground">
+                  Loading recent activity…
+                </td>
+              </tr>
+            )}
+            {isError && (
+              <tr>
+                <td colSpan={5} className="py-6 px-4 text-sm text-destructive">
+                  Failed to load recent activity.
+                </td>
+              </tr>
+            )}
+            {!isLoading && !isError && displayActivities.length === 0 && (
+              <tr>
+                <td colSpan={5} className="py-6 px-4 text-sm text-muted-foreground">
+                  No activity yet.
+                </td>
+              </tr>
+            )}
             {displayActivities.map((activity, index) => (
               <tr key={activity.id} className={`border-b border-border/30 hover:bg-muted/20 transition-colors ${index === displayActivities.length - 1 ? 'border-b-0' : ''}`}>
                 <td className="py-4 px-4">
-                  <span className="text-sm text-muted-foreground font-medium">{activity.timestamp}</span>
+                  <span className="text-sm text-muted-foreground font-medium">
+                    {format(new Date(activity.timestamp), "yyyy-MM-dd HH:mm")}
+                  </span>
                 </td>
                 <td className="py-4 px-4">
-                  <span className="text-sm font-semibold text-foreground">{activity.action}</span>
+                  <span className="text-sm font-semibold text-foreground">{activity.activity}</span>
                 </td>
                 <td className="py-4 px-4">
-                  <button className="text-sm font-semibold text-primary hover:underline text-left hover:text-primary/80 transition-colors">
-                    {activity.clientName}
-                  </button>
+                  <span className="text-sm font-semibold text-foreground">{activity.client}</span>
+                </td>
+                <td className="py-4 px-4">
+                  <span className="text-sm text-foreground">{formatCurrency(activity.amount)}</span>
                 </td>
                 <td className="py-4 px-4">
                   <Badge className={`${getStatusColor(activity.status)} capitalize font-medium px-3 py-1`}>

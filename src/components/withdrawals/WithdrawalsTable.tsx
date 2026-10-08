@@ -15,6 +15,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import type { WithdrawalRequest } from "@/pages/Withdrawals";
+import { FxAmountCell } from "@/components/transactions/FxAmount";
 
 interface WithdrawalsTableProps {
   withdrawals: WithdrawalRequest[];
@@ -158,8 +159,13 @@ export function WithdrawalsTable({
                       </div>
                     </div>
                   </TableCell>
-                  <TableCell className="font-semibold">
-                    <div>${withdrawal.amount}</div>
+                  <TableCell>
+                    <FxAmountCell
+                      usd={withdrawal.amount}
+                      inrAmount={withdrawal.inrAmount}
+                      fxRate={withdrawal.fxRate}
+                      direction="withdraw"
+                    />
                     <div className="text-xs text-muted-foreground">
                       Requested:{" "}
                       {format(new Date(withdrawal.submissionDate), "MMM dd")}

@@ -13,6 +13,7 @@ import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { formatDistanceToNow } from "date-fns";
 import type { DepositRequest } from "@/pages/DepositRequests";
+import { FxAmountCell } from "@/components/transactions/FxAmount";
 import {
   exportToCSV,
   exportToPDF,
@@ -33,8 +34,9 @@ export function exportDepositRequests(
   const headers = [
     "Client Name",
     "Email",
-    "Amount",
-    "Currency",
+    "Amount (USD)",
+    "Amount (INR)",
+    "Rate (INR per USD)",
     "Payment Method",
     "Status",
     "Submitted Date",
@@ -43,6 +45,8 @@ export function exportDepositRequests(
     request.clientName,
     request.email,
     request.amount,
+    request.inrAmount ?? "",
+    request.fxRate ?? "",
     request.paymentMethod.toUpperCase(),
     formatStatusForExport(request.status),
     formatDateForExport(request.submittedAt),
@@ -141,7 +145,7 @@ export function DepositRequestsTable({
           <TableHeader>
             <TableRow>
               <TableHead>Client</TableHead>
-              <TableHead>Amount</TableHead>
+              <TableHead>Amount (USD / INR @ rate)</TableHead>
               <TableHead>Payment Method</TableHead>
               <TableHead>Status</TableHead>
               <TableHead>Submitted</TableHead>
@@ -178,9 +182,12 @@ export function DepositRequestsTable({
                   </div>
                 </TableCell>
                 <TableCell>
-                  <div className="font-semibold text-foreground">
-                    ${request.amount}
-                  </div>
+                  <FxAmountCell
+                    usd={request.amount}
+                    inrAmount={request.inrAmount}
+                    fxRate={request.fxRate}
+                    direction="deposit"
+                  />
                 </TableCell>
                 <TableCell>
                   {getPaymentMethodBadge(request.paymentMethod)}

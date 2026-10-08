@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { takeSessionEndReason } from "@/lib/session";
 import { useDispatch, useSelector } from "react-redux";
 import { RootState } from "@/API/store";
 import { login } from "@/API/auth.api";
@@ -30,6 +31,18 @@ const Login = () => {
   const [showPassword, setShowPassword] = useState(false);
   // const [isLoading, setIsLoading] = useState(false);
   const { toast } = useToast();
+
+  // Sent here by an auto logout: say why, once.
+  useEffect(() => {
+    const reason = takeSessionEndReason();
+    if (reason) {
+      toast({
+        title: reason === "expired" ? "Session expired" : "You have been logged out",
+        description: "Please log in again.",
+        variant: "destructive",
+      });
+    }
+  }, [toast]);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
