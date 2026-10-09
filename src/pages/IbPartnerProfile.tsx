@@ -229,9 +229,8 @@ export default function IbPartnerProfile() {
   const tiers: IbTier[] = tiersData?.data ?? [];
   const d: IbPartnerDetail | undefined = data?.data;
   const backToDirectory = () => navigate("/ib-management?tab=partners");
-  // The rate card editor lives on IB management; it opens there for this tier.
   const onViewRatePlan = (tier: IbTier) =>
-    navigate(`/ib-management?tab=tiers&rates=${tier.id}`);
+    navigate(`/ib-management/tiers/${tier.id}/rates`);
 
   const [togglePayoutHold, holdState] = useTogglePayoutHoldMutation();
   const [suspendPartner, suspendState] = useSuspendPartnerMutation();
